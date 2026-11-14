@@ -12,9 +12,12 @@ import { PROFILE_LINKS } from "../../data/links";
 // CONFIG
 // ========================================
 
-const WORLD_WIDTH = 2000;
-const WORLD_HEIGHT = 720;
+const VIEW_HEIGHT = 720; // what the player sees (matches canvas height)
 const GROUND_Y = 640;
+const GROUND_THICKNESS = 80 * 3; // 240px of ground (filler extends below the view)
+const WORLD_WIDTH = 2000;
+// +20 because the ground sprite's top sits 20px below GROUND_Y
+const WORLD_HEIGHT = GROUND_Y + 20 + GROUND_THICKNESS; // 900
 
 const COLORS = {
   skyTop: 0x0b1718,
@@ -145,11 +148,9 @@ export class BootScene extends Phaser.Scene {
   private createPlatforms(): void {
     this.platforms = this.physics.add.staticGroup();
 
-    const groundHeight = WORLD_HEIGHT - GROUND_Y;
-
     this.platforms.create(
       WORLD_WIDTH / 2,
-      GROUND_Y + groundHeight / 2 + 20,
+      GROUND_Y + GROUND_THICKNESS / 2 + 20,
       "ground"
     );
   }
@@ -187,7 +188,8 @@ export class BootScene extends Phaser.Scene {
 
   private setupCamera(): void {
     const camera = this.cameras.main;
-    camera.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+    // Pinned to the visible height: the filler ground below is never scrolled into view
+    camera.setBounds(0, 0, WORLD_WIDTH, VIEW_HEIGHT);
     camera.startFollow(this.player, true, 0.1, 0.1);
   }
 
@@ -234,8 +236,8 @@ export class BootScene extends Phaser.Scene {
       );
     });
 
-    this.makeTexture("ground", WORLD_WIDTH, WORLD_HEIGHT - GROUND_Y, (g) => {
-      const height = WORLD_HEIGHT - GROUND_Y;
+    this.makeTexture("ground", WORLD_WIDTH, GROUND_THICKNESS, (g) => {
+      const height = GROUND_THICKNESS;
 
       g.fillStyle(COLORS.ground, 1);
       g.fillRect(0, 0, WORLD_WIDTH, height);
@@ -244,10 +246,10 @@ export class BootScene extends Phaser.Scene {
       g.fillStyle(0x527442, 1);
       g.fillRect(0, 0, WORLD_WIDTH, 7);
 
-      // Texture continues downward
+      // Texture continues downward (scaled with the thicker ground)
       g.fillStyle(0x35543a, 1);
 
-      for (let i = 0; i < 180; i++) {
+      for (let i = 0; i < 180 * 3; i++) {
         g.fillRect(
           Phaser.Math.Between(0, WORLD_WIDTH),
           Phaser.Math.Between(12, height),
@@ -279,6 +281,7 @@ export class BootScene extends Phaser.Scene {
     this.createForest(FAR_FOREST);
     this.createForest(MID_FOREST);
 
+    // Backdrop fill, extended down to the bottom of the world
     this.add
       .graphics()
       .setDepth(-20)
@@ -297,7 +300,8 @@ export class BootScene extends Phaser.Scene {
     sky.fillGradientStyle(
       COLORS.skyTop, COLORS.skyTop, COLORS.skyBottom, COLORS.skyBottom, 1
     );
-    sky.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+    // Gradient stays on the visible height so the colors look like the original
+    sky.fillRect(0, 0, WORLD_WIDTH, VIEW_HEIGHT);
 
     // Moon (second circle carves out a crescent)
     this.add.circle(1430, 125, 48, 0xd5d9ad, 0.9).setDepth(-39);
@@ -564,16 +568,6 @@ export class BootScene extends Phaser.Scene {
       { alpha: { from: 0.65, to: 0.95 }, scale: { from: 3.2, to: 3.8 } },
       550
     );
-
-    // Stones
-    // const stones = this.add.graphics().setDepth(2);
-    // const stonePositions = [
-    //   [-40, 0], [-28, 10], [0, 15], [30, 10], [42, 0], [20, -5], [-20, -5],
-    // ];
-    // for (const [sx, sy] of stonePositions) {
-    //   ellipse(stones, 0x434b3c, x + sx, y + sy, 22, 15);
-    //   ellipse(stones, 0x77806a, x + sx - 3, y + sy - 4, 8, 4, 0.7);
-    // }
 
     // Wood
     const wood = this.add.graphics().setDepth(3);
