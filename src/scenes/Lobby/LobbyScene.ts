@@ -164,7 +164,7 @@ export class BootScene extends Phaser.Scene {
         boardWidth: 140,
         boardHeight: 66,
         signTitle: "WELCOME",
-        title: "Welcome to REZA.EXE",
+        title: "Welcome to REZA's Dev World",
         dialogs: [WELCOME_MESSAGE],
       })
     );
