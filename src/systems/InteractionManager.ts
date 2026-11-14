@@ -1,6 +1,6 @@
 import Phaser from "phaser";
-import { Player } from "../entities/Player";
-import { Interactable } from "./Interactable";
+import { Player } from "../objects/Player";
+import { Interactable } from "../objects/Interactable";
 import { GAME_FONT } from "../game/theme";
 
 export class InteractionManager {
