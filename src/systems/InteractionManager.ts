@@ -3,6 +3,7 @@ import Phaser from "phaser";
 import type { Player } from "../objects/Player";
 import { GAME_FONT } from "../game/theme";
 import type { IInteractable } from "../objects/IInteractable";
+import type { InteractableLink } from "../data/links";
 
 // Anything interactable also needs a world position to measure distance from.
 type Interactable = IInteractable & Phaser.GameObjects.Components.Transform;
@@ -20,6 +21,7 @@ const UI_DEPTH = 1000;
 const DIALOG_MAX_WIDTH = 560;
 const DIALOG_MIN_HEIGHT = 150;
 const DIALOG_PADDING = 30;
+const LINK_ROW_HEIGHT = 32;
 
 const COLORS = {
   forest: 0x172c23,
@@ -55,6 +57,7 @@ export class InteractionManager {
 
   private readonly interactKey: Phaser.Input.Keyboard.Key;
   private readonly escapeKey: Phaser.Input.Keyboard.Key;
+  private readonly numberKeys: Phaser.Input.Keyboard.Key[];
 
   private readonly prompt: Phaser.GameObjects.Text;
 
@@ -67,6 +70,9 @@ export class InteractionManager {
   private readonly dialogAction: Phaser.GameObjects.Text;
   private readonly dialogExit: Phaser.GameObjects.Text;
 
+  // Clickable link rows for the open dialog (rebuilt every time one opens).
+  private linkTexts: Phaser.GameObjects.Text[] = [];
+
   constructor(scene: Phaser.Scene, player: Player) {
     this.scene = scene;
     this.player = player;
@@ -75,6 +81,13 @@ export class InteractionManager {
     const keyboard = scene.input.keyboard!;
     this.interactKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
     this.escapeKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
+
+    // 1-9 open the matching link while a dialog with links is showing.
+    const { ONE, TWO, THREE, FOUR, FIVE, SIX, SEVEN, EIGHT, NINE } =
+      Phaser.Input.Keyboard.KeyCodes;
+    this.numberKeys = [ONE, TWO, THREE, FOUR, FIVE, SIX, SEVEN, EIGHT, NINE].map(
+      (code) => keyboard.addKey(code)
+    );
 
     const text = (size: number, color: string, extra: object = {}) =>
       scene.add.text(0, 0, "", {
@@ -189,6 +202,10 @@ export class InteractionManager {
         this.closeDialog();
       } else if (interactPressed) {
         this.nextDialog();
+      } else {
+        this.numberKeys.forEach((key, i) => {
+          if (Phaser.Input.Keyboard.JustDown(key)) this.openLink(i);
+        });
       }
       return;
     }
@@ -277,6 +294,7 @@ export class InteractionManager {
 
     this.prompt.setVisible(false);
     this.dialogTitle.setText(object.title);
+    this.buildLinks(object.links ?? []);
     this.dialog.setVisible(true);
 
     this.showCurrentDialog();
@@ -314,6 +332,7 @@ export class InteractionManager {
   }
 
   private closeDialog(): void {
+    this.clearLinks();
     this.activeObject = null;
     this.activeProgress = null;
     this.activeDialogs = [];
@@ -323,6 +342,53 @@ export class InteractionManager {
     this.dialogAction.setColor(COLORS.muted);
     this.dialogExit.setColor(COLORS.muted);
     this.refreshNearby();
+  }
+
+  // ========================================
+  // LINKS
+  // ========================================
+
+  private buildLinks(links: InteractableLink[]): void {
+    this.clearLinks();
+
+    links.forEach((link, index) => {
+      const row = this.scene.add
+        .text(0, 0, `${index + 1}    ${link.label}`, {
+          fontFamily: GAME_FONT,
+          fontSize: "17px",
+          color: COLORS.cream,
+          padding: { x: 8, y: 4 },
+        })
+        .setScrollFactor(0)
+        .setInteractive({ useHandCursor: true });
+
+      // POINTER_UP so browsers treat the click as a user gesture for popups.
+      row.on(Phaser.Input.Events.POINTER_UP, () => this.openLink(index));
+
+      if (!this.isTouch) {
+        row.on(Phaser.Input.Events.POINTER_OVER, () => row.setColor(COLORS.fireLight));
+        row.on(Phaser.Input.Events.POINTER_OUT, () => row.setColor(COLORS.cream));
+      }
+
+      this.dialog.add(row);
+      this.linkTexts.push(row);
+    });
+  }
+
+  private clearLinks(): void {
+    this.linkTexts.forEach((row) => row.destroy());
+    this.linkTexts = [];
+  }
+
+  private openLink(index: number): void {
+    const link = this.activeObject?.links?.[index];
+    if (!link) return;
+
+    if (link.url.startsWith("mailto:")) {
+      window.location.href = link.url;
+    } else {
+      window.open(link.url, "_blank", "noopener,noreferrer");
+    }
   }
 
   // ========================================
@@ -347,9 +413,12 @@ export class InteractionManager {
     this.dialogMessage.setWordWrapWidth(width - DIALOG_PADDING * 2);
 
     const titleH = this.dialogTitle.height;
+    const linksH = this.linkTexts.length
+      ? this.linkTexts.length * LINK_ROW_HEIGHT + 12
+      : 0;
     const height = Math.max(
       DIALOG_MIN_HEIGHT,
-      titleH + this.dialogMessage.height + 85
+      titleH + this.dialogMessage.height + linksH + 85
     );
 
     this.dialog.setPosition(screenW / 2, screenH - height / 2 - 28);
@@ -366,6 +435,11 @@ export class InteractionManager {
       .setPosition(left + 2, top + titleH / 2);
 
     this.dialogMessage.setPosition(left, top + titleH + 15);
+
+    const linksTop = top + titleH + 15 + this.dialogMessage.height + 12;
+    this.linkTexts.forEach((row, i) =>
+      row.setPosition(left, linksTop + i * LINK_ROW_HEIGHT)
+    );
 
     // Buttons have 8/6px text padding, so offset to keep the text aligned.
     const hintRight = width / 2 - DIALOG_PADDING + 8;

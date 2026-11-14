@@ -3,8 +3,10 @@ import Phaser from "phaser";
 import { Player } from "../objects/Player";
 import { LobbyInteractable } from "../objects/LobbyInteractable";
 import { SajjadNPC } from "../objects/SajjadNPC";
+import { BrownBearNPC } from "../objects/BrownBearNPC";
 import { InteractionManager } from "../systems/InteractionManager";
 import { GAME_FONT } from "../game/theme";
+import { PROFILE_LINKS } from "../data/links";
 
 // ========================================
 // CONFIG
@@ -21,6 +23,8 @@ const COLORS = {
   fire: 0xffa34d,
   playerLight: 0xffc078,
 };
+
+const LINKS_MESSAGE = `Want to get in touch, or see the work behind the world?\n\nPick a link below — click it, tap it, or press its number key.`;
 
 const WELCOME_MESSAGE = `Welcome, traveler!
 
@@ -87,6 +91,7 @@ export class BootScene extends Phaser.Scene {
   private interactionManager!: InteractionManager;
   private playerLight!: Phaser.GameObjects.Light;
   private sajjad!: SajjadNPC;
+  private bear!: BrownBearNPC;
 
   constructor() {
     super("BootScene");
@@ -109,6 +114,7 @@ export class BootScene extends Phaser.Scene {
     this.interactionManager = new InteractionManager(this, this.player);
 
     this.createWelcomeSign();
+    this.createLinksPost();
     this.createCampfireArea();
     this.createFireflies();
     this.setupCamera();
@@ -118,6 +124,7 @@ export class BootScene extends Phaser.Scene {
   update(time: number): void {
     this.player.update();
     this.sajjad?.update(time);
+    this.bear?.update(time);
     this.interactionManager.update();
     this.playerLight.setPosition(this.player.x, this.player.y - 10);
   }
@@ -143,7 +150,7 @@ export class BootScene extends Phaser.Scene {
   private createWelcomeSign(): void {
     this.interactionManager.add(
       new LobbyInteractable(this, {
-        x: 600,
+        x: 500,
         y: 625,
         groundY: GROUND_Y,
         boardWidth: 140,
@@ -151,6 +158,22 @@ export class BootScene extends Phaser.Scene {
         signTitle: "WELCOME",
         title: "Welcome to REZA.EXE",
         dialogs: [WELCOME_MESSAGE],
+      })
+    );
+  }
+
+  private createLinksPost(): void {
+    this.interactionManager.add(
+      new LobbyInteractable(this, {
+        x: 1650,
+        y: 625,
+        groundY: GROUND_Y,
+        boardWidth: 140,
+        boardHeight: 66,
+        signTitle: "FIND REZA",
+        title: "Find Reza Online",
+        dialogs: [LINKS_MESSAGE],
+        links: PROFILE_LINKS,
       })
     );
   }
@@ -408,6 +431,10 @@ export class BootScene extends Phaser.Scene {
     // Sajjad sits sideways on the log
     this.sajjad = new SajjadNPC(this, logX, 635);
     this.interactionManager.add(this.sajjad);
+
+    // Brown bear with the Lion & Sun flag stands on the other side of the fire
+    this.bear = new BrownBearNPC(this, 1170, 640);
+    this.interactionManager.add(this.bear);
   }
 
   private createLog(x: number, y: number): void {
