@@ -4,6 +4,12 @@
 
 Explore a pixel-art world, interact with NPCs, and discover my projects, skills, and development journey through a platformer experience.
 
+## 📸 Screenshots
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/a3a03b39-0017-4ab2-8fe1-a528650a1f9c" width="48%" />
+</p>
+
 ## 🛠️ Tech Stack
 
 - Phaser 3
