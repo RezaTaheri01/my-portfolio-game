@@ -144,7 +144,14 @@ export class BootScene extends Phaser.Scene {
 
   private createPlatforms(): void {
     this.platforms = this.physics.add.staticGroup();
-    this.platforms.create(WORLD_WIDTH / 2, GROUND_Y + 60, "ground");
+
+    const groundHeight = WORLD_HEIGHT - GROUND_Y;
+
+    this.platforms.create(
+      WORLD_WIDTH / 2,
+      GROUND_Y + groundHeight / 2 + 20,
+      "ground"
+    );
   }
 
   private createWelcomeSign(): void {
@@ -227,15 +234,23 @@ export class BootScene extends Phaser.Scene {
       );
     });
 
-    this.makeTexture("ground", WORLD_WIDTH, 120, (g) => {
-      g.fillStyle(COLORS.ground, 1).fillRect(0, 0, WORLD_WIDTH, 120);
-      g.fillStyle(0x527442, 1).fillRect(0, 0, WORLD_WIDTH, 7);
+    this.makeTexture("ground", WORLD_WIDTH, WORLD_HEIGHT - GROUND_Y, (g) => {
+      const height = WORLD_HEIGHT - GROUND_Y;
 
+      g.fillStyle(COLORS.ground, 1);
+      g.fillRect(0, 0, WORLD_WIDTH, height);
+
+      // Only the top edge
+      g.fillStyle(0x527442, 1);
+      g.fillRect(0, 0, WORLD_WIDTH, 7);
+
+      // Texture continues downward
       g.fillStyle(0x35543a, 1);
+
       for (let i = 0; i < 180; i++) {
         g.fillRect(
           Phaser.Math.Between(0, WORLD_WIDTH),
-          Phaser.Math.Between(12, 115),
+          Phaser.Math.Between(12, height),
           Phaser.Math.Between(2, 9),
           2
         );
@@ -385,9 +400,8 @@ export class BootScene extends Phaser.Scene {
 
     const clusters = [
       { x: 310, count: 3 }, { x: 470, count: 2 },
-      { x: 820, count: 4 }, { x: 1120, count: 2 },
+      { x: 820, count: 4 },
       { x: 1510, count: 3 }, { x: 1840, count: 4 },
-      { x: 2200, count: 3 }, { x: 2440, count: 3 },
     ];
     const capColors = [0xc85b4b, 0xd58a45, 0xb66b9c, 0xd6bd70];
 
@@ -423,46 +437,102 @@ export class BootScene extends Phaser.Scene {
   // ========================================
 
   private createCampfireArea(): void {
-    const logX = 975;
+    const logX = 965;
 
-    this.createCampfire(1050, 620);
-    this.createLog(logX, 635);
+    this.createCampfire(1050, 640);
+    this.createLog(logX, 640, 70);
 
     // Sajjad sits sideways on the log
-    this.sajjad = new SajjadNPC(this, logX, 635);
+    this.sajjad = new SajjadNPC(this, logX, 640);
     this.interactionManager.add(this.sajjad);
 
     // Brown bear with the Lion & Sun flag stands on the other side of the fire
-    this.bear = new BrownBearNPC(this, 1170, 640);
+    this.bear = new BrownBearNPC(this, 1155, 650);
     this.interactionManager.add(this.bear);
   }
 
-  private createLog(x: number, y: number): void {
+  private createLog(
+    x: number,
+    y: number,
+    width: number = 130,
+    height: number = 28
+  ): void {
+    const scaleX = width / 130;
+    const scaleY = height / 28;
+
     const bark = this.add.graphics();
-    bark.lineStyle(2, 0x3d281e, 0.8);
+    bark.lineStyle(2 * Math.min(scaleX, scaleY), 0x3d281e, 0.8);
+
     for (let i = -45; i <= 45; i += 20) {
-      bark.lineBetween(i, -18, i + 10, 2);
+      bark.lineBetween(
+        i * scaleX,
+        -18 * scaleY,
+        (i + 10) * scaleX,
+        2 * scaleY
+      );
     }
 
     const rings = this.add.graphics();
-    rings.lineStyle(2, 0x5c3e2a, 0.8);
-    rings.strokeEllipse(65, -8, 10, 17);
-    rings.strokeEllipse(65, -8, 5, 10);
+    rings.lineStyle(2 * Math.min(scaleX, scaleY), 0x5c3e2a, 0.8);
 
-    const body = this.add.rectangle(0, -8, 130, 28, 0x5b3826);
-    body.setStrokeStyle(3, 0x2e211b);
+    rings.strokeEllipse(
+      width / 2 - 65 * scaleX + 65 * scaleX,
+      -8 * scaleY,
+      10 * scaleX,
+      17 * scaleY
+    );
 
-    this.add
-      .container(x, y, [
-        // this.add.ellipse(0, 8, 145, 25, 0x101812, 0.55), // shadow
-        body,
-        this.add.rectangle(0, -16, 112, 7, 0x8a5b38), // highlight
-        bark,
-        this.add.ellipse(-65, -8, 20, 28, 0x3e281e), // left end
-        this.add.ellipse(65, -8, 20, 28, 0x8b6240), // right end
-        rings,
-      ])
-      .setDepth(3);
+    rings.strokeEllipse(
+      65 * scaleX,
+      -8 * scaleY,
+      5 * scaleX,
+      10 * scaleY
+    );
+
+    const body = this.add.rectangle(
+      0,
+      -8 * scaleY,
+      width,
+      height,
+      0x5b3826
+    );
+
+    body.setStrokeStyle(
+      3 * Math.min(scaleX, scaleY),
+      0x2e211b
+    );
+
+    this.add.container(x, y, [
+      body,
+
+      this.add.rectangle(
+        0,
+        -16 * scaleY,
+        width * 0.86,
+        7 * scaleY,
+        0x8a5b38
+      ),
+
+      bark,
+
+      this.add.ellipse(
+        -width / 2,
+        -8 * scaleY,
+        20 * scaleX,
+        height,
+        0x3e281e
+      ),
+
+      this.add.ellipse(
+        width / 2,
+        -8 * scaleY,
+        20 * scaleX,
+        height,
+        0x8b6240
+      ),
+
+      rings,
+    ]).setDepth(3);
   }
 
   private createCampfire(x: number, y: number): void {
@@ -496,14 +566,14 @@ export class BootScene extends Phaser.Scene {
     );
 
     // Stones
-    const stones = this.add.graphics().setDepth(2);
-    const stonePositions = [
-      [-40, 0], [-28, 10], [0, 15], [30, 10], [42, 0], [20, -5], [-20, -5],
-    ];
-    for (const [sx, sy] of stonePositions) {
-      ellipse(stones, 0x434b3c, x + sx, y + sy, 22, 15);
-      ellipse(stones, 0x77806a, x + sx - 3, y + sy - 4, 8, 4, 0.7);
-    }
+    // const stones = this.add.graphics().setDepth(2);
+    // const stonePositions = [
+    //   [-40, 0], [-28, 10], [0, 15], [30, 10], [42, 0], [20, -5], [-20, -5],
+    // ];
+    // for (const [sx, sy] of stonePositions) {
+    //   ellipse(stones, 0x434b3c, x + sx, y + sy, 22, 15);
+    //   ellipse(stones, 0x77806a, x + sx - 3, y + sy - 4, 8, 4, 0.7);
+    // }
 
     // Wood
     const wood = this.add.graphics().setDepth(3);
