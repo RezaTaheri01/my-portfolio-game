@@ -1,311 +1,380 @@
-
 import Phaser from "phaser";
-import { Player } from "../objects/Player";
-import type { IInteractable } from "../objects/IInteractable";
+
+import type { Player } from "../objects/Player";
 import { GAME_FONT } from "../game/theme";
+import type { IInteractable } from "../objects/IInteractable";
+
+// Anything interactable also needs a world position to measure distance from.
+type Interactable = IInteractable & Phaser.GameObjects.Components.Transform;
+
+interface Progress {
+  /** Index of the message to resume from. */
+  index: number;
+  /** How many times the full dialog has been shown. */
+  runs: number;
+}
+
+const INTERACTION_DISTANCE = 100;
+const UI_DEPTH = 1000;
+
+const DIALOG_MAX_WIDTH = 560;
+const DIALOG_MIN_HEIGHT = 150;
+const DIALOG_PADDING = 30;
+
+const COLORS = {
+  forest: 0x172c23,
+  forestLight: 0x263e2d,
+  forestBorder: 0x3d5940,
+  wood: 0x765032,
+  fire: 0xffa34d,
+
+  forestCss: "#172c23",
+  fireLight: "#ffc078",
+  cream: "#fff0d2",
+  muted: "#c5b99d",
+};
 
 export class InteractionManager {
-    private scene: Phaser.Scene;
-    private player: Player;
+  private readonly scene: Phaser.Scene;
+  private readonly player: Player;
 
-    private interactables: IInteractable[] = [];
-    private nearbyObject: IInteractable | null = null;
+  private readonly interactables: Interactable[] = [];
+  private nearbyObject: Interactable | null = null;
+  private activeObject: Interactable | null = null;
+  private dialogIndex = 0;
 
-    private interactionKey: Phaser.Input.Keyboard.Key;
-    private escapeKey: Phaser.Input.Keyboard.Key;
+  // Messages currently being shown (the normal ones, or the end dialog).
+  private activeDialogs: string[] = [];
 
-    private readonly interactionDistance = 100;
+  // Per-object memory for interactables that declare `progression`.
+  private readonly progress = new Map<Interactable, Progress>();
+  // Progress being tracked by the open dialog (null for untracked / end dialogs).
+  private activeProgress: Progress | null = null;
 
-    private promptText: Phaser.GameObjects.Text;
-    private dialogBackground: Phaser.GameObjects.Rectangle;
-    private dialogTitle: Phaser.GameObjects.Text;
-    private dialogMessage: Phaser.GameObjects.Text;
-    private dialogHint: Phaser.GameObjects.Text;
+  private readonly isTouch: boolean;
 
-    private dialogOpen = false;
+  private readonly interactKey: Phaser.Input.Keyboard.Key;
+  private readonly escapeKey: Phaser.Input.Keyboard.Key;
 
-    constructor(scene: Phaser.Scene, player: Player) {
-        this.scene = scene;
-        this.player = player;
+  private readonly prompt: Phaser.GameObjects.Text;
 
-        const keyboard = scene.input.keyboard!;
+  private readonly dialog: Phaser.GameObjects.Container;
+  private readonly dialogBackground: Phaser.GameObjects.Rectangle;
+  private readonly dialogInner: Phaser.GameObjects.Rectangle;
+  private readonly dialogAccent: Phaser.GameObjects.Rectangle;
+  private readonly dialogTitle: Phaser.GameObjects.Text;
+  private readonly dialogMessage: Phaser.GameObjects.Text;
+  private readonly dialogAction: Phaser.GameObjects.Text;
+  private readonly dialogExit: Phaser.GameObjects.Text;
 
-        this.interactionKey = keyboard.addKey(
-            Phaser.Input.Keyboard.KeyCodes.E
-        );
+  constructor(scene: Phaser.Scene, player: Player) {
+    this.scene = scene;
+    this.player = player;
+    this.isTouch = scene.sys.game.device.input.touch;
 
-        this.escapeKey = keyboard.addKey(
-            Phaser.Input.Keyboard.KeyCodes.ESC
-        );
+    const keyboard = scene.input.keyboard!;
+    this.interactKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
+    this.escapeKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
 
-        // Interaction prompt
-        this.promptText = scene.add.text(
-            0,
-            0,
-            "E  —  Interact",
-            {
-                fontFamily: GAME_FONT,
-                fontSize: "18px",
-                color: "#fff0d2",
-                backgroundColor: "#493523",
-                padding: { x: 14, y: 9 },
-            }
-        )
-            .setOrigin(0.5)
-            .setScrollFactor(0)
-            .setDepth(1000)
-            .setVisible(false);
+    const text = (size: number, color: string, extra: object = {}) =>
+      scene.add.text(0, 0, "", {
+        fontFamily: GAME_FONT,
+        fontSize: `${size}px`,
+        color,
+        ...extra,
+      });
 
-        // Dialog background
-        this.dialogBackground = scene.add.rectangle(
-            0, 0, 500, 170, 0x19251c, 0.97
-        )
-            .setStrokeStyle(2, 0x987044)
-            .setScrollFactor(0)
-            .setDepth(1001)
-            .setVisible(false);
+    // Prompt shown near an interactable
+    this.prompt = text(18, COLORS.cream, {
+      backgroundColor: COLORS.forestCss,
+      padding: { x: 14, y: 9 },
+    })
+      .setText(this.isTouch ? "Tap  —  Interact" : "E  —  Interact")
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(UI_DEPTH)
+      .setVisible(false)
+      .setInteractive({ useHandCursor: true });
 
-        // Dialog title
-        this.dialogTitle = scene.add.text(
-            0,
-            0,
-            "",
-            {
-                fontFamily: GAME_FONT,
-                fontSize: "23px",
-                color: "#e8bd78",
-                fontStyle: "bold",
-            }
-        )
-            .setScrollFactor(0)
-            .setDepth(1002)
-            .setVisible(false);
+    // Clicking / tapping the prompt acts as pressing E.
+    this.prompt.on(Phaser.Input.Events.POINTER_DOWN, this.onPromptTap, this);
 
-        // Dialog message
-        this.dialogMessage = scene.add.text(
-            0,
-            0,
-            "",
-            {
-                fontFamily: GAME_FONT,
-                fontSize: "17px",
-                color: "#f4ead8",
-                wordWrap: { width: 440 },
-                lineSpacing: 8,
-            }
-        )
-            .setScrollFactor(0)
-            .setDepth(1002)
-            .setVisible(false);
+    // Dialog: everything lives in one container (positioned in layoutDialog)
+    this.dialogBackground = scene.add
+      .rectangle(0, 0, 1, 1, COLORS.forest, 0.97)
+      .setStrokeStyle(3, COLORS.wood);
 
-        // Dialog hint
-        this.dialogHint = scene.add.text(
-            0,
-            0,
-            "E or ESC — Close",
-            {
-                fontFamily: GAME_FONT,
-                fontSize: "13px",
-                color: "#b5a58b",
-            }
-        )
-            .setScrollFactor(0)
-            .setDepth(1002)
-            .setVisible(false);
+    this.dialogInner = scene.add
+      .rectangle(0, 0, 1, 1, COLORS.forestLight, 0.96)
+      .setStrokeStyle(1, COLORS.forestBorder);
 
-        this.layoutUI();
+    this.dialogAccent = scene.add.rectangle(0, 0, 4, 28, COLORS.fire);
 
-        scene.scale.on("resize", this.layoutUI, this);
-        scene.events.once("shutdown", this.destroy, this);
-    }
+    this.dialogTitle = text(22, COLORS.fireLight, { fontStyle: "bold" });
+    this.dialogMessage = text(16, COLORS.cream, { lineSpacing: 9 });
 
-    // Register any object implementing IInteractable
-    public add(interactable: IInteractable): void {
-        if (this.interactables.includes(interactable)) return;
+    // Clickable hint buttons (bottom-right of the dialog)
+    const button = (label: string, onClick: () => void) => {
+      const b = text(12, COLORS.muted, { padding: { x: 8, y: 6 } })
+        .setText(label)
+        .setOrigin(1, 0)
+        .setScrollFactor(0)
+        .setInteractive({ useHandCursor: true });
 
-        this.interactables.push(interactable);
-    }
+      b.on(Phaser.Input.Events.POINTER_DOWN, onClick);
 
-    // Unregister an interactable
-    public remove(interactable: IInteractable): void {
-        interactable.setNearby(false);
+      if (!this.isTouch) {
+        b.on(Phaser.Input.Events.POINTER_OVER, () => b.setColor(COLORS.fireLight));
+        b.on(Phaser.Input.Events.POINTER_OUT, () => b.setColor(COLORS.muted));
+      }
 
-        this.interactables = this.interactables.filter(
-            object => object !== interactable
-        );
-
-        if (this.nearbyObject === interactable) {
-            this.nearbyObject = null;
-            this.promptText.setVisible(false);
-        }
-    }
-
-    public update(): void {
-        if (this.dialogOpen) {
-            this.promptText.setVisible(false);
-
-            const closeWithE =
-                Phaser.Input.Keyboard.JustDown(this.interactionKey);
-
-            const closeWithEscape =
-                Phaser.Input.Keyboard.JustDown(this.escapeKey);
-
-            if (closeWithE || closeWithEscape) {
-                this.closeDialog();
-            }
-
-            return;
-        }
-
-        this.findNearbyObject();
-
-        this.promptText.setVisible(
-            this.nearbyObject !== null
-        );
-
-        if (
-            this.nearbyObject &&
-            Phaser.Input.Keyboard.JustDown(this.interactionKey)
-        ) {
-            this.openDialog(this.nearbyObject);
-        }
-    }
-
-    private findNearbyObject(): void {
-        let closest: IInteractable | null = null;
-        let closestDistance = this.interactionDistance;
-
-        for (const object of this.interactables) {
-            const distance = Phaser.Math.Distance.Between(
-                this.player.x,
-                this.player.y,
-                object.x,
-                object.y
-            );
-
-            if (distance < closestDistance) {
-                closest = object;
-                closestDistance = distance;
-            }
-        }
-
-        // Update visual feedback
-        for (const object of this.interactables) {
-            object.setNearby(object === closest);
-        }
-
-        this.nearbyObject = closest;
-    }
-
-    private openDialog(object: IInteractable): void {
-        this.dialogOpen = true;
-
-        this.dialogTitle.setText(object.title);
-        this.dialogMessage.setText(object.message);
-
-        const padding = 30;
-
-        const titleHeight = this.dialogTitle.height;
-        const messageHeight = this.dialogMessage.height;
-
-        const contentWidth = Math.max(
-            this.dialogTitle.width,
-            this.dialogMessage.width
-        );
-
-        const dialogWidth = Math.max(
-            320,
-            Math.min(560, contentWidth + padding * 2)
-        );
-
-        const dialogHeight = titleHeight + messageHeight + 85;
-
-        this.dialogBackground.setSize(
-            dialogWidth,
-            dialogHeight
-        );
-
-        this.dialogBackground.setPosition(
-            this.scene.scale.width / 2,
-            this.scene.scale.height - dialogHeight / 2 - 30
-        );
-
-        this.dialogTitle.setPosition(
-            this.dialogBackground.x - dialogWidth / 2 + padding,
-            this.dialogBackground.y - dialogHeight / 2 + 20
-        );
-
-        this.dialogMessage.setPosition(
-            this.dialogTitle.x,
-            this.dialogTitle.y + titleHeight + 15
-        );
-
-        this.dialogHint.setPosition(
-            this.dialogBackground.x + dialogWidth / 2 - padding,
-            this.dialogBackground.y + dialogHeight / 2 - 30
-        ).setOrigin(1, 0);
-
-        this.setDialogVisible(true);
-    }
-
-    private closeDialog(): void {
-        this.dialogOpen = false;
-        this.nearbyObject = null;
-
-        this.setDialogVisible(false);
-    }
-
-    private setDialogVisible(visible: boolean): void {
-        this.dialogBackground.setVisible(visible);
-        this.dialogTitle.setVisible(visible);
-        this.dialogMessage.setVisible(visible);
-        this.dialogHint.setVisible(visible);
-    }
-
-    private layoutUI = (): void => {
-        const width = this.scene.scale.width;
-        const height = this.scene.scale.height;
-
-        this.promptText.setPosition(
-            width / 2,
-            height - 65
-        );
-
-        if (!this.dialogOpen) return;
-
-        // Keep the open dialog centered after resizing.
-        const dialogWidth = this.dialogBackground.width;
-        const dialogHeight = this.dialogBackground.height;
-
-        this.dialogBackground.setPosition(
-            width / 2,
-            height - dialogHeight / 2 - 30
-        );
-
-        this.dialogTitle.setPosition(
-            width / 2 - dialogWidth / 2 + 30,
-            height - dialogHeight - 10
-        );
-
-        this.dialogMessage.setPosition(
-            this.dialogTitle.x,
-            this.dialogTitle.y + this.dialogTitle.height + 15
-        );
-
-        this.dialogHint.setPosition(
-            width / 2 + dialogWidth / 2 - 30,
-            height - 30
-        );
+      return b;
     };
 
-    public destroy(): void {
-        this.scene.scale.off("resize", this.layoutUI, this);
+    this.dialogAction = button("", () => this.nextDialog());
+    this.dialogExit = button(this.isTouch ? "Exit" : "ESC  Exit", () =>
+      this.closeDialog()
+    );
 
-        for (const object of this.interactables) {
-            object.setNearby(false);
-        }
+    this.dialog = scene.add
+      .container(0, 0, [
+        this.dialogBackground,
+        this.dialogInner,
+        this.dialogAccent,
+        this.dialogTitle,
+        this.dialogMessage,
+        this.dialogAction,
+        this.dialogExit,
+      ])
+      .setScrollFactor(0)
+      .setDepth(UI_DEPTH + 1)
+      .setVisible(false);
 
-        this.interactables = [];
-        this.nearbyObject = null;
+    this.layout();
+
+    scene.scale.on("resize", this.layout, this);
+    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, this.destroy, this);
+  }
+
+  // ========================================
+  // PUBLIC API
+  // ========================================
+
+  /** True while a dialog is showing (handy for locking player movement). */
+  public get isDialogOpen(): boolean {
+    return this.activeObject !== null;
+  }
+
+  public add(interactable: Interactable): void {
+    this.interactables.push(interactable);
+  }
+
+  public remove(interactable: Interactable): void {
+    const index = this.interactables.indexOf(interactable);
+    if (index === -1) return;
+
+    this.interactables.splice(index, 1);
+    this.progress.delete(interactable);
+    interactable.setNearby(false);
+
+    if (this.nearbyObject === interactable) this.nearbyObject = null;
+    if (this.activeObject === interactable) this.closeDialog();
+  }
+
+  public update(): void {
+    const interactPressed = Phaser.Input.Keyboard.JustDown(this.interactKey);
+
+    if (this.activeObject) {
+      if (Phaser.Input.Keyboard.JustDown(this.escapeKey)) {
+        this.closeDialog();
+      } else if (interactPressed) {
+        this.nextDialog();
+      }
+      return;
     }
+
+    this.refreshNearby();
+
+    if (this.nearbyObject && interactPressed) {
+      this.openDialog(this.nearbyObject);
+    }
+  }
+
+  public destroy(): void {
+    this.scene.scale.off("resize", this.layout, this);
+    this.prompt.destroy();
+    this.dialog.destroy();
+  }
+
+  // ========================================
+  // POINTER INPUT
+  // ========================================
+
+  private onPromptTap(): void {
+    if (this.nearbyObject && !this.activeObject) {
+      this.openDialog(this.nearbyObject);
+    }
+  }
+
+  // ========================================
+  // NEARBY DETECTION
+  // ========================================
+
+  private refreshNearby(): void {
+    let closest: Interactable | null = null;
+    let closestDistance = INTERACTION_DISTANCE;
+
+    for (const object of this.interactables) {
+      const distance = Phaser.Math.Distance.Between(
+        this.player.x,
+        this.player.y,
+        object.x,
+        object.y
+      );
+
+      if (distance < closestDistance) {
+        closest = object;
+        closestDistance = distance;
+      }
+    }
+
+    for (const object of this.interactables) {
+      object.setNearby(object === closest);
+    }
+
+    this.nearbyObject = closest;
+    this.prompt.setVisible(closest !== null);
+  }
+
+  // ========================================
+  // DIALOG FLOW
+  // ========================================
+
+  private openDialog(object: Interactable): void {
+    const { progression } = object;
+
+    let dialogs = object.dialogs;
+    let index = 0;
+    this.activeProgress = null;
+
+    if (progression) {
+      const progress = this.progress.get(object) ?? { index: 0, runs: 0 };
+      this.progress.set(object, progress);
+
+      if (progress.runs >= progression.runs) {
+        dialogs = progression.endDialogs; // seen everything: show the end dialog
+      } else {
+        this.activeProgress = progress;
+        index = Math.min(progress.index, dialogs.length - 1); // resume
+      }
+    }
+
+    if (dialogs.length === 0) return;
+
+    this.activeObject = object;
+    this.activeDialogs = dialogs;
+    this.dialogIndex = index;
+
+    this.prompt.setVisible(false);
+    this.dialogTitle.setText(object.title);
+    this.dialog.setVisible(true);
+
+    this.showCurrentDialog();
+  }
+
+  private showCurrentDialog(): void {
+    const dialogs = this.activeDialogs;
+    const isLast = this.dialogIndex >= dialogs.length - 1;
+
+    // Remember where the player is; reaching the last message completes a run.
+    if (this.activeProgress) {
+      if (isLast) {
+        this.activeProgress.runs++;
+        this.activeProgress.index = 0;
+      } else {
+        this.activeProgress.index = this.dialogIndex;
+      }
+    }
+
+    this.dialogMessage.setText(dialogs[this.dialogIndex]);
+    const action = isLast ? "Close" : "Continue";
+    this.dialogAction.setText(this.isTouch ? action : `E  ${action}`);
+
+    this.layoutDialog();
+  }
+
+  private nextDialog(): void {
+    if (this.dialogIndex >= this.activeDialogs.length - 1) {
+      this.closeDialog();
+      return;
+    }
+
+    this.dialogIndex++;
+    this.showCurrentDialog();
+  }
+
+  private closeDialog(): void {
+    this.activeObject = null;
+    this.activeProgress = null;
+    this.activeDialogs = [];
+    this.dialogIndex = 0;
+
+    this.dialog.setVisible(false);
+    this.dialogAction.setColor(COLORS.muted);
+    this.dialogExit.setColor(COLORS.muted);
+    this.refreshNearby();
+  }
+
+  // ========================================
+  // LAYOUT
+  // ========================================
+
+  private layout(): void {
+    const { width, height } = this.scene.scale;
+
+    this.prompt.setPosition(width / 2, height - 40);
+
+    if (this.activeObject) this.layoutDialog();
+  }
+
+  // The container sits at the dialog's center; children use local coordinates.
+  private layoutDialog(): void {
+    const { width: screenW, height: screenH } = this.scene.scale;
+
+    const width = Math.min(DIALOG_MAX_WIDTH, screenW - 32);
+
+    // Wrap width must be set before measuring the message height.
+    this.dialogMessage.setWordWrapWidth(width - DIALOG_PADDING * 2);
+
+    const titleH = this.dialogTitle.height;
+    const height = Math.max(
+      DIALOG_MIN_HEIGHT,
+      titleH + this.dialogMessage.height + 85
+    );
+
+    this.dialog.setPosition(screenW / 2, screenH - height / 2 - 28);
+
+    this.dialogBackground.setSize(width, height);
+    this.dialogInner.setSize(width - 10, height - 10);
+
+    const left = -width / 2 + DIALOG_PADDING;
+    const top = -height / 2 + 20;
+
+    this.dialogTitle.setPosition(left + 10, top);
+    this.dialogAccent
+      .setSize(4, Math.max(24, titleH))
+      .setPosition(left + 2, top + titleH / 2);
+
+    this.dialogMessage.setPosition(left, top + titleH + 15);
+
+    // Buttons have 8/6px text padding, so offset to keep the text aligned.
+    const hintRight = width / 2 - DIALOG_PADDING + 8;
+    const hintY = height / 2 - 31;
+
+    this.dialogExit.setPosition(hintRight, hintY);
+    this.dialogAction.setPosition(
+      hintRight - this.dialogExit.width - 12,
+      hintY
+    );
+  }
 }

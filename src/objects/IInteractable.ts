@@ -1,10 +1,11 @@
-
 export interface IInteractable {
-    readonly x: number;
-    readonly y: number;
+  readonly title: string;
+  readonly dialogs: string[];
+  
+  progression?: {
+    runs: number;          // full read-throughs before switching to endDialogs
+    endDialogs: string[];
+  };
 
-    readonly title: string;
-    readonly message: string;
-
-    setNearby(nearby: boolean): void;
+  setNearby(nearby: boolean): void;
 }
