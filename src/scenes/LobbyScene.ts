@@ -2,7 +2,7 @@ import Phaser from "phaser";
 
 import { Player } from "../objects/Player";
 import { LobbyInteractable } from "../objects/LobbyInteractable";
-import { SajjadNPC } from "../objects/SajjadNPC";
+import { SajjadNPC } from "../objects/Lobby/SajjadNPC";
 import { BrownBearNPC } from "../objects/BrownBearNPC";
 import { InteractionManager } from "../systems/InteractionManager";
 import { GAME_FONT } from "../game/theme";
