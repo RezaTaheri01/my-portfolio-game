@@ -1,14 +1,15 @@
+
 import Phaser from "phaser";
 import { Player } from "../objects/Player";
-import { Interactable } from "../objects/Interactable";
+import type { IInteractable } from "../objects/IInteractable";
 import { GAME_FONT } from "../game/theme";
 
 export class InteractionManager {
     private scene: Phaser.Scene;
     private player: Player;
 
-    private interactables: Interactable[] = [];
-    private nearbyObject: Interactable | null = null;
+    private interactables: IInteractable[] = [];
+    private nearbyObject: IInteractable | null = null;
 
     private interactionKey: Phaser.Input.Keyboard.Key;
     private escapeKey: Phaser.Input.Keyboard.Key;
@@ -39,13 +40,16 @@ export class InteractionManager {
 
         // Interaction prompt
         this.promptText = scene.add.text(
-            0, 0, "E  —  Interact", {
-            fontFamily: GAME_FONT,
-            fontSize: "18px",
-            color: "#ffffff",
-            backgroundColor: "#312e81",
-            padding: { x: 14, y: 9 },
-        }
+            0,
+            0,
+            "E  —  Interact",
+            {
+                fontFamily: GAME_FONT,
+                fontSize: "18px",
+                color: "#fff0d2",
+                backgroundColor: "#493523",
+                padding: { x: 14, y: 9 },
+            }
         )
             .setOrigin(0.5)
             .setScrollFactor(0)
@@ -54,21 +58,24 @@ export class InteractionManager {
 
         // Dialog background
         this.dialogBackground = scene.add.rectangle(
-            0, 0, 500, 170, 0x111827, 0.96
+            0, 0, 500, 170, 0x19251c, 0.97
         )
-            .setStrokeStyle(2, 0x818cf8)
+            .setStrokeStyle(2, 0x987044)
             .setScrollFactor(0)
             .setDepth(1001)
             .setVisible(false);
 
         // Dialog title
         this.dialogTitle = scene.add.text(
-            0, 0, "", {
-            fontFamily: GAME_FONT,
-            fontSize: "23px",
-            color: "#a5b4fc",
-            fontStyle: "bold",
-        }
+            0,
+            0,
+            "",
+            {
+                fontFamily: GAME_FONT,
+                fontSize: "23px",
+                color: "#e8bd78",
+                fontStyle: "bold",
+            }
         )
             .setScrollFactor(0)
             .setDepth(1002)
@@ -76,13 +83,16 @@ export class InteractionManager {
 
         // Dialog message
         this.dialogMessage = scene.add.text(
-            0, 0, "", {
-            fontFamily: GAME_FONT,
-            fontSize: "17px",
-            color: "#ffffff",
-            wordWrap: { width: 440 },
-            lineSpacing: 8,
-        }
+            0,
+            0,
+            "",
+            {
+                fontFamily: GAME_FONT,
+                fontSize: "17px",
+                color: "#f4ead8",
+                wordWrap: { width: 440 },
+                lineSpacing: 8,
+            }
         )
             .setScrollFactor(0)
             .setDepth(1002)
@@ -90,11 +100,14 @@ export class InteractionManager {
 
         // Dialog hint
         this.dialogHint = scene.add.text(
-            0, 0, "E or ESC — Close", {
-            fontFamily: GAME_FONT,
-            fontSize: "13px",
-            color: "#94a3b8",
-        }
+            0,
+            0,
+            "E or ESC — Close",
+            {
+                fontFamily: GAME_FONT,
+                fontSize: "13px",
+                color: "#b5a58b",
+            }
         )
             .setScrollFactor(0)
             .setDepth(1002)
@@ -103,13 +116,31 @@ export class InteractionManager {
         this.layoutUI();
 
         scene.scale.on("resize", this.layoutUI, this);
+        scene.events.once("shutdown", this.destroy, this);
     }
 
-    public add(interactable: Interactable) {
+    // Register any object implementing IInteractable
+    public add(interactable: IInteractable): void {
+        if (this.interactables.includes(interactable)) return;
+
         this.interactables.push(interactable);
     }
 
-    public update() {
+    // Unregister an interactable
+    public remove(interactable: IInteractable): void {
+        interactable.setNearby(false);
+
+        this.interactables = this.interactables.filter(
+            object => object !== interactable
+        );
+
+        if (this.nearbyObject === interactable) {
+            this.nearbyObject = null;
+            this.promptText.setVisible(false);
+        }
+    }
+
+    public update(): void {
         if (this.dialogOpen) {
             this.promptText.setVisible(false);
 
@@ -132,17 +163,16 @@ export class InteractionManager {
             this.nearbyObject !== null
         );
 
-        if (this.nearbyObject) {
-            if (
-                Phaser.Input.Keyboard.JustDown(this.interactionKey)
-            ) {
-                this.openDialog(this.nearbyObject);
-            }
+        if (
+            this.nearbyObject &&
+            Phaser.Input.Keyboard.JustDown(this.interactionKey)
+        ) {
+            this.openDialog(this.nearbyObject);
         }
     }
 
-    private findNearbyObject() {
-        let closest: Interactable | null = null;
+    private findNearbyObject(): void {
+        let closest: IInteractable | null = null;
         let closestDistance = this.interactionDistance;
 
         for (const object of this.interactables) {
@@ -167,14 +197,14 @@ export class InteractionManager {
         this.nearbyObject = closest;
     }
 
-    private openDialog(object: Interactable) {
+    private openDialog(object: IInteractable): void {
         this.dialogOpen = true;
 
         this.dialogTitle.setText(object.title);
         this.dialogMessage.setText(object.message);
 
-        // Calculate content dimensions
         const padding = 30;
+
         const titleHeight = this.dialogTitle.height;
         const messageHeight = this.dialogMessage.height;
 
@@ -183,10 +213,13 @@ export class InteractionManager {
             this.dialogMessage.width
         );
 
-        const dialogWidth = Math.max(320, contentWidth + padding * 2);
+        const dialogWidth = Math.max(
+            320,
+            Math.min(560, contentWidth + padding * 2)
+        );
+
         const dialogHeight = titleHeight + messageHeight + 85;
 
-        // Resize background
         this.dialogBackground.setSize(
             dialogWidth,
             dialogHeight
@@ -197,42 +230,39 @@ export class InteractionManager {
             this.scene.scale.height - dialogHeight / 2 - 30
         );
 
-        // Position title
         this.dialogTitle.setPosition(
             this.dialogBackground.x - dialogWidth / 2 + padding,
             this.dialogBackground.y - dialogHeight / 2 + 20
         );
 
-        // Position message
         this.dialogMessage.setPosition(
             this.dialogTitle.x,
             this.dialogTitle.y + titleHeight + 15
         );
 
-        // Position hint
         this.dialogHint.setPosition(
             this.dialogBackground.x + dialogWidth / 2 - padding,
             this.dialogBackground.y + dialogHeight / 2 - 30
-        );
+        ).setOrigin(1, 0);
 
         this.setDialogVisible(true);
     }
 
-    private closeDialog() {
+    private closeDialog(): void {
         this.dialogOpen = false;
         this.nearbyObject = null;
 
         this.setDialogVisible(false);
     }
 
-    private setDialogVisible(visible: boolean) {
+    private setDialogVisible(visible: boolean): void {
         this.dialogBackground.setVisible(visible);
         this.dialogTitle.setVisible(visible);
         this.dialogMessage.setVisible(visible);
         this.dialogHint.setVisible(visible);
     }
 
-    private layoutUI = () => {
+    private layoutUI = (): void => {
         const width = this.scene.scale.width;
         const height = this.scene.scale.height;
 
@@ -241,24 +271,41 @@ export class InteractionManager {
             height - 65
         );
 
+        if (!this.dialogOpen) return;
+
+        // Keep the open dialog centered after resizing.
+        const dialogWidth = this.dialogBackground.width;
+        const dialogHeight = this.dialogBackground.height;
+
         this.dialogBackground.setPosition(
             width / 2,
-            height - 115
+            height - dialogHeight / 2 - 30
         );
 
         this.dialogTitle.setPosition(
-            width / 2 - 220,
-            height - 185
+            width / 2 - dialogWidth / 2 + 30,
+            height - dialogHeight - 10
         );
 
         this.dialogMessage.setPosition(
-            width / 2 - 220,
-            height - 145
+            this.dialogTitle.x,
+            this.dialogTitle.y + this.dialogTitle.height + 15
         );
 
         this.dialogHint.setPosition(
-            width / 2 + 220,
-            height - 48
-        ).setOrigin(1, 0);
+            width / 2 + dialogWidth / 2 - 30,
+            height - 30
+        );
     };
+
+    public destroy(): void {
+        this.scene.scale.off("resize", this.layoutUI, this);
+
+        for (const object of this.interactables) {
+            object.setNearby(false);
+        }
+
+        this.interactables = [];
+        this.nearbyObject = null;
+    }
 }
