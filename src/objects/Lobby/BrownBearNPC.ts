@@ -360,9 +360,6 @@ export class BrownBearNPC extends Phaser.GameObjects.Container {
         // Knuckles + claws
         px(c.furDark, 45, 38, 1, 4);
         px(c.furDark, 47, 38, 1, 4);
-        px(c.claw, 44, 47);
-        px(c.claw, 46, 47);
-        px(c.claw, 48, 47);
 
         // ---------- Left arm (screen left), resting at his side ----------
 
