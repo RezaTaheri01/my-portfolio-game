@@ -404,7 +404,6 @@ export class BootScene extends Phaser.Scene {
 
     const clusters = [
       { x: 310, count: 3 }, { x: 470, count: 2 },
-      { x: 820, count: 4 },
       { x: 1510, count: 3 }, { x: 1840, count: 4 },
     ];
     const capColors = [0xc85b4b, 0xd58a45, 0xb66b9c, 0xd6bd70];
