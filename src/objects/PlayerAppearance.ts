@@ -1,7 +1,39 @@
-
 import Phaser from "phaser";
 
 type Pose = "idle" | "run" | "jump" | "fall";
+type Rect = [x: number, y: number, w: number, h: number];
+
+// Celeste-inspired climber. Outline, skin, pants, boots and the
+// wood / gold belt are shared with Sajjad and the bear, so the whole
+// cast still reads as one set of characters.
+const C = {
+  outline: 0x211b2b,
+
+  // Red hair (the Celeste signature)
+  hairDark: 0x8f2a2f,
+  hair: 0xd8433a,
+  hairLight: 0xff7a59,
+
+  // Skin (Sajjad's ramp, a little paler)
+  skin: 0xf2c49b,
+  skinLight: 0xffe2bd,
+  skinShadow: 0xd99578,
+  blush: 0xe8826f,
+
+  // Climbing jacket
+  jacketDark: 0x2a4f8f,
+  jacket: 0x3f78c4,
+  jacketLight: 0x6fa8e8,
+  cuff: 0xf5efe3,
+
+  // Shared with the NPCs
+  pants: 0x34394f,
+  pantsLight: 0x4c5570,
+  boot: 0x302431,
+  bootLight: 0x715044,
+  wood: 0x805137,
+  gold: 0xf2c66d,
+} as const;
 
 export class PlayerAppearance extends Phaser.GameObjects.Container {
   private sprite: Phaser.GameObjects.Sprite;
@@ -58,132 +90,167 @@ export class PlayerAppearance extends Phaser.GameObjects.Container {
     }
   }
 
+  // The ponytail trails behind her (art faces left, tail goes right).
+  // It reacts to the pose: it streams out when running, drops when
+  // jumping and whips upward when falling.
+  private hairTail(pose: Pose, frame: number, bob: number): Rect[] {
+    switch (pose) {
+      case "run": {
+        const wave = [0, 1, 0, -1][frame % 4];
+        return [
+          [17, 5, 3, 3],
+          [19, 7 + wave, 3, 3],
+          [21, 9 + wave * 2, 2, 3],
+        ];
+      }
+      case "jump":
+        return [
+          [17, 5, 3, 3],
+          [18, 8, 3, 4],
+          [18, 12, 3, 3],
+        ];
+      case "fall":
+        return [
+          [17, 5, 3, 3],
+          [19, 3, 3, 3],
+          [20, 1, 2, 3],
+        ];
+      default:
+        return [
+          [17, 5 + bob, 3, 3],
+          [18, 8 + bob, 3, 3],
+          [18 + bob, 11 + bob, 2, 3],
+        ];
+    }
+  }
+
   private drawFrame(key: string, pose: Pose, frame: number): void {
     const g = this.scene.make.graphics({ x: 0, y: 0 });
 
-    const px = (
-      color: number,
-      x: number,
-      y: number,
-      w = 1,
-      h = 1
-    ) => {
+    const px = (color: number, x: number, y: number, w = 1, h = 1) => {
       g.fillStyle(color, 1);
       g.fillRect(x, y, w, h);
     };
-
-    // Palette
-    const outline = 0x211b2b;
-    const hair = 0x713b38;
-    const hairLight = 0xb96b50;
-    const skin = 0xf2c49b;
-    const skinShadow = 0xd99578;
-    const teal = 0x277d79;
-    const tealLight = 0x54b5a0;
-    const tealDark = 0x19534f;
-    const gold = 0xf2c66d;
-    const pants = 0x34394f;
-    const boot = 0x302431;
 
     const running = pose === "run";
     const jumping = pose === "jump";
     const falling = pose === "fall";
 
-    const step = running
-      ? (frame % 2 === 0 ? 2 : -2)
-      : 0;
-
+    const step = running ? (frame % 2 === 0 ? 2 : -2) : 0;
     const bob = pose === "idle" && frame === 1 ? 1 : 0;
 
-    const leftLegX = 9 + step;
-    const rightLegX = 14 - step;
-    const legY = jumping ? 23 : falling ? 24 : 24;
+    const leftLegX = 8 + step;
+    const rightLegX = 13 - step;
+    const legY = 24;
 
-    // Back hair
-    px(outline, 8, 3 + bob, 9, 12);
-    px(hair, 9, 4 + bob, 7, 10);
-    px(hairLight, 10, 5 + bob, 2, 4);
+    // ---------- Ponytail (behind everything) ----------
 
-    // Legs
-    px(outline, leftLegX, legY, 5, 8);
-    px(outline, rightLegX, legY, 5, 8);
+    const tail = this.hairTail(pose, frame, bob);
 
-    px(pants, leftLegX + 1, legY, 3, 5);
-    px(pants, rightLegX + 1, legY, 3, 5);
+    for (const [x, y, w, h] of tail) {
+      px(C.outline, x - 1, y - 1, w + 2, h + 2);
+    }
+    for (const [x, y, w, h] of tail) {
+      px(C.hairDark, x, y, w, h);
+      px(C.hair, x, y, Math.max(1, w - 1), h);
+    }
+    // Tail highlight
+    px(C.hairLight, tail[0][0], tail[0][1], 1, 2);
+
+    // ---------- Legs ----------
+
+    px(C.outline, leftLegX, legY, 5, 8);
+    px(C.outline, rightLegX, legY, 5, 8);
+
+    px(C.pants, leftLegX + 1, legY, 3, 5);
+    px(C.pants, rightLegX + 1, legY, 3, 5);
+    px(C.pantsLight, leftLegX + 1, legY, 1, 4);
+    px(C.pantsLight, rightLegX + 1, legY, 1, 4);
 
     // Boots
-    px(boot, leftLegX - 1, legY + 5, 6, 3);
-    px(boot, rightLegX - 1, legY + 5, 6, 3);
-    px(0x715044, leftLegX, legY + 5, 3, 1);
-    px(0x715044, rightLegX, legY + 5, 3, 1);
+    px(C.boot, leftLegX - 1, legY + 5, 6, 3);
+    px(C.boot, rightLegX - 1, legY + 5, 6, 3);
+    px(C.bootLight, leftLegX, legY + 5, 3, 1);
+    px(C.bootLight, rightLegX, legY + 5, 3, 1);
 
-    // Cloak silhouette
-    px(outline, 5, 11 + bob, 17, 15);
-    px(tealDark, 6, 12 + bob, 15, 12);
-    px(teal, 7, 12 + bob, 13, 10);
-    px(tealLight, 8, 13 + bob, 2, 6);
+    // ---------- Far arm (behind the jacket) ----------
 
-    // Arms
-    const armY = jumping ? 9 : falling ? 14 : 13;
+    const armY = jumping ? 9 : falling ? 12 : 13;
+    const swing = running ? (frame % 2 === 0 ? 1 : -1) : 0;
 
-    px(outline, 4, armY + bob, 5, 8);
-    px(outline, 18, armY + bob, 5, 8);
+    px(C.outline, 17, armY + bob - swing, 4, 9);
+    px(C.jacketDark, 18, armY + 1 + bob - swing, 2, 5);
+    px(C.cuff, 18, armY + 5 + bob - swing, 2, 1);
+    px(C.skin, 18, armY + 6 + bob - swing, 2, 2);
 
-    px(teal, 5, armY + 1 + bob, 3, 5);
-    px(teal, 19, armY + 1 + bob, 3, 5);
+    // ---------- Jacket ----------
 
-    px(skin, 5, armY + 6 + bob, 3, 2);
-    px(skin, 19, armY + 6 + bob, 3, 2);
+    px(C.outline, 6, 12 + bob, 12, 13);
+    px(C.jacketDark, 7, 13 + bob, 10, 11);
+    px(C.jacket, 8, 13 + bob, 8, 9);
+    px(C.jacketLight, 8, 14 + bob, 2, 6);
 
-    // Tunic
-    px(outline, 8, 10 + bob, 11, 15);
-    px(tealDark, 9, 11 + bob, 9, 12);
-    px(teal, 10, 11 + bob, 7, 10);
-    px(tealLight, 10, 12 + bob, 2, 5);
+    // Zipper (offset toward her facing side)
+    px(C.jacketDark, 10, 15 + bob, 1, 7);
 
-    // Belt
-    px(outline, 9, 19 + bob, 10, 3);
-    px(0x805137, 10, 20 + bob, 8, 1);
-    px(gold, 13, 19 + bob, 2, 3);
+    // Belt: same wood and gold as the NPC props
+    px(C.outline, 7, 21 + bob, 10, 3);
+    px(C.wood, 8, 22 + bob, 8, 1);
+    px(C.gold, 9, 21 + bob, 2, 3);
 
-    // Gold shoulder strap
-    px(0x805137, 16, 11 + bob, 2, 7);
-    px(gold, 16, 13 + bob, 1, 3);
+    // ---------- Near arm ----------
 
-    // Neck
-    px(outline, 11, 7 + bob, 5, 5);
-    px(skin, 12, 8 + bob, 3, 4);
+    px(C.outline, 4, armY + bob + swing, 4, 9);
+    px(C.jacket, 5, armY + 1 + bob + swing, 2, 5);
+    px(C.jacketLight, 5, armY + 1 + bob + swing, 1, 3);
+    px(C.cuff, 5, armY + 5 + bob + swing, 2, 1);
+    px(C.skin, 5, armY + 6 + bob + swing, 2, 2);
 
-    // Hood
-    px(outline, 7, 1 + bob, 13, 12);
-    px(tealDark, 8, 2 + bob, 11, 9);
-    px(teal, 9, 2 + bob, 9, 8);
-    px(tealLight, 9, 3 + bob, 2, 4);
+    // ---------- Collar ----------
 
-    // Face
-    px(outline, 9, 3 + bob, 9, 9);
-    px(skin, 10, 4 + bob, 7, 7);
-    px(skinShadow, 10, 9 + bob, 7, 2);
+    px(C.outline, 7, 11 + bob, 9, 3);
+    px(C.jacketDark, 8, 12 + bob, 7, 2);
+    px(C.jacketLight, 8, 12 + bob, 3, 1);
 
-    // Hair fringe
-    px(hair, 9, 2 + bob, 9, 4);
-    px(hairLight, 11, 2 + bob, 4, 1);
-    px(hair, 9, 4 + bob, 2, 4);
-    px(hair, 16, 4 + bob, 2, 4);
+    // ---------- Head ----------
 
-    // Eyes
-    px(outline, 11, 7 + bob, 1, 1);
-    px(outline, 15, 7 + bob, 1, 1);
+    // Back hair: rounded, shoulder length, tucked behind the face
+    px(C.outline, 6, 1 + bob, 12, 3);
+    px(C.outline, 5, 3 + bob, 14, 8);
+    px(C.outline, 6, 11 + bob, 11, 2);
+    px(C.hairDark, 7, 2 + bob, 10, 2);
+    px(C.hairDark, 6, 4 + bob, 12, 6);
+    px(C.hair, 7, 2 + bob, 9, 2);
+    px(C.hair, 6, 4 + bob, 9, 5);
+    px(C.hairDark, 7, 10 + bob, 9, 1);
 
-    // Small face highlight
-    px(0xffe2bd, 12, 5 + bob, 2, 1);
+    // Face (wider, with the jaw showing)
+    px(C.outline, 6, 5 + bob, 10, 8);
+    px(C.skin, 7, 5 + bob, 8, 7);
+    px(C.skinShadow, 8, 11 + bob, 6, 1);
 
-    // Hood details
-    px(gold, 8, 10 + bob, 2, 1);
-    px(gold, 17, 10 + bob, 2, 1);
+    // Bangs swept across the forehead, ending in a point
+    px(C.hair, 7, 2 + bob, 9, 3);
+    px(C.hair, 7, 5 + bob, 6, 1);
+    px(C.hair, 7, 6 + bob, 2, 1);
+    px(C.hairLight, 8, 3 + bob, 4, 1);
+    px(C.hairLight, 7, 4 + bob, 2, 1);
 
-    // Small cloak clasp
-    px(gold, 17, 13 + bob, 2, 2);
+    // Side lock framing the left cheek
+    px(C.hair, 6, 6 + bob, 2, 5);
+    px(C.hairDark, 6, 9 + bob, 2, 2);
+    px(C.hairLight, 6, 6 + bob, 1, 2);
+
+    // Eyes (looking left) + tiny shine
+    px(C.outline, 8, 7 + bob, 2, 2);
+    px(C.outline, 12, 7 + bob, 2, 2);
+    px(C.skinLight, 8, 7 + bob, 1, 1);
+    px(C.skinLight, 12, 7 + bob, 1, 1);
+
+    // Blush + small mouth
+    px(C.blush, 8, 9 + bob, 2, 1);
+    px(C.blush, 13, 9 + bob, 1, 1);
+    px(C.skinShadow, 10, 10 + bob, 2, 1);
 
     g.generateTexture(key, 24, 36);
     g.destroy();
