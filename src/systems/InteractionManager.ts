@@ -398,7 +398,7 @@ export class InteractionManager {
   private layout(): void {
     const { width, height } = this.scene.scale;
 
-    this.prompt.setPosition(width / 2, height - 40);
+    this.prompt.setPosition(width / 2, height - 30);
 
     if (this.activeObject) this.layoutDialog();
   }
