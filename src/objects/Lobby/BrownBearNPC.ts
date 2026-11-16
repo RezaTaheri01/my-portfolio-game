@@ -43,6 +43,7 @@ const PALETTE = {
     eyeShine: 0xffffff,
 
     claw: 0xf0e2c0,
+    blush: 0xb86a50,
 
     // Same wood / gold as the player's belt
     pole: 0x805137,
@@ -69,8 +70,6 @@ const FLAG = {
     swordHilt: 0x7a5200,
     border: 0x211b2b,
 } as const;
-
-type EllipsePart = [cx: number, cy: number, rx: number, ry: number];
 
 // ------------------------------------------------------------
 // NPC
@@ -209,7 +208,11 @@ export class BrownBearNPC extends Phaser.GameObjects.Container {
         }
     }
 
-    // ---------- Bear (pixel art, standing, front view) ----------
+    // ---------- Bear (pixel art, sitting, front view) ----------
+    //
+    // Same art language as the Player and Sajjad: hard-edged rectangles,
+    // 1px outline, dark base + lit body + highlight strip on the left.
+    // He sits on the ground with his feet toward us, holding the flag.
 
     private static drawFrame(
         scene: Phaser.Scene,
@@ -221,6 +224,9 @@ export class BrownBearNPC extends Phaser.GameObjects.Container {
 
         // Breathing: the head sinks a pixel on frame 1
         const b = frame === 1 ? 1 : 0;
+
+        // Seated, so the head sits lower than a standing bear's
+        const hy = 8 + b;
 
         const px = (
             color: number,
@@ -234,50 +240,57 @@ export class BrownBearNPC extends Phaser.GameObjects.Container {
             g.fillRect(x, y, w, h);
         };
 
-        // Pixel-snapped ellipse (one rect per row)
-        const ellipse = (
-            color: number,
-            cx: number,
-            cy: number,
-            rx: number,
-            ry: number,
-            alpha = 1
-        ): void => {
-            g.fillStyle(color, alpha);
-            for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y++) {
-                const dy = (y + 0.5 - cy) / ry;
+        // Soft shadow on the ground
+        const groundShadow = (): void => {
+            g.fillStyle(0x000000, 0.2);
+            for (let y = 54; y <= 56; y++) {
+                const dy = (y + 0.5 - 55) / 1.5;
                 if (Math.abs(dy) > 1) continue;
 
-                const half = rx * Math.sqrt(1 - dy * dy);
-                const x0 = Math.round(cx - half);
-                const x1 = Math.round(cx + half);
-
-                if (x1 > x0) g.fillRect(x0, y, x1 - x0, 1);
+                const half = 21 * Math.sqrt(1 - dy * dy);
+                g.fillRect(Math.round(25 - half), y, Math.round(half * 2), 1);
             }
         };
 
-        // One shared outline around a group of overlapping shapes
-        const outline = (parts: EllipsePart[]): void => {
-            for (const [cx, cy, rx, ry] of parts) {
-                ellipse(c.outline, cx, cy, rx + 1, ry + 1);
+        // Rectangle with stepped corners (r = 1 small, r = 2 large)
+        const chunk = (
+            color: number,
+            x: number,
+            y: number,
+            w: number,
+            h: number,
+            r = 1
+        ): void => {
+            px(color, x + r, y, w - r * 2, h);
+            px(color, x, y + r, w, h - r * 2);
+
+            if (r === 2) px(color, x + 1, y + 1, w - 2, h - 2);
+        };
+
+        type Part = [x: number, y: number, w: number, h: number, r?: number];
+
+        // One shared outline around a group of overlapping parts
+        const outline = (parts: Part[]): void => {
+            for (const [x, y, w, h, r = 1] of parts) {
+                chunk(c.outline, x - 1, y - 1, w + 2, h + 2, r);
             }
         };
 
-        // Dark base, lit body, small highlight (same shading idea as the NPCs)
-        const shaded = (cx: number, cy: number, rx: number, ry: number): void => {
-            ellipse(c.furDark, cx, cy, rx, ry);
-            ellipse(c.fur, cx + 1, cy - 1, rx - 2, ry - 1.5);
-            ellipse(c.furLight, cx + 2, cy - ry * 0.45, rx * 0.4, ry * 0.22);
+        // Dark base, lit body (dark rim left + bottom), hard highlight strip
+        const fur = (part: Part, strip = 2): void => {
+            const [x, y, w, h, r = 1] = part;
 
-            // Hard 2px highlight strip on the left, like Sajjad's shirt
-            const hy = Math.round(cy - ry * 0.4);
-            const hh = Math.max(2, Math.round(ry * 0.8));
-            px(c.furLight, Math.round(cx - rx * 0.6), hy, 2, hh);
+            chunk(c.furDark, x, y, w, h, r);
+            chunk(c.fur, x + 1, y, w - 1, h - 1, r);
+
+            const sh = Math.max(2, Math.round(h * 0.45));
+            px(c.furLight, x + 2, y + 2, strip, sh);
+            px(c.furLight, x + 2 + strip, y + 1, 2, 1);
         };
 
         // ---------- Ground shadow ----------
 
-        ellipse(0x000000, 25, 55, 20, 1.5, 0.2);
+        groundShadow();
 
         // ---------- Flag pole ----------
 
@@ -287,93 +300,134 @@ export class BrownBearNPC extends Phaser.GameObjects.Container {
         px(c.poleLight, POLE_X - 1, 4, 1, 18);
         px(c.poleTip, POLE_X - 2, 0, 4, 3);
 
-        // ---------- Torso: huge shoulders and chest ----------
+        // ---------- Body: round, seated ----------
 
-        outline([[24, 38, 17, 16], [24, 28, 18, 8]]);
-        shaded(24, 38, 17, 16);
-        shaded(24, 28, 18, 8);
+        const body: Part = [8, 29, 32, 21, 2];
+
+        outline([body]);
+        fur(body, 3);
 
         // Lighter belly + a few fur strokes
-        ellipse(c.belly, 24, 44, 8, 8);
-        px(c.furDark, 19, 35, 1, 2);
-        px(c.furDark, 29, 37, 1, 2);
+        chunk(c.belly, 16, 34, 16, 13, 2);
+        px(c.furDark, 19, 36, 1, 2);
+        px(c.furDark, 29, 38, 1, 2);
         px(c.furDark, 24, 41, 1, 2);
-        px(c.furDark, 15, 31, 1, 2);
-        px(c.furDark, 33, 31, 1, 2);
-
-        // ---------- Feet ----------
-
-        for (const fx of [15, 33]) {
-            outline([[fx, 51, 7, 3]]);
-            shaded(fx, 51, 7, 3);
-            px(c.claw, fx - 4, 55);
-            px(c.claw, fx, 55);
-            px(c.claw, fx + 4, 55);
-        }
+        px(c.furDark, 12, 33, 1, 2);
+        px(c.furDark, 36, 33, 1, 2);
 
         // ---------- Ears (behind the head) ----------
 
         for (const ex of [13, 35]) {
-            outline([[ex, 6 + b, 4, 4]]);
-            ellipse(c.fur, ex, 6 + b, 4, 4);
-            ellipse(c.innerEar, ex, 7 + b, 2, 2);
+            outline([[ex - 4, 2 + hy, 8, 7]]);
+            chunk(c.fur, ex - 4, 2 + hy, 8, 7);
+            chunk(c.innerEar, ex - 2, 4 + hy, 4, 4);
+            px(c.furLight, ex - 4, 3 + hy, 1, 2);
         }
 
         // ---------- Head ----------
 
-        outline([[24, 14 + b, 13, 10]]);
-        shaded(24, 14 + b, 13, 10);
+        outline([[11, 4 + hy, 26, 19, 2]]);
+        fur([11, 4 + hy, 26, 19, 2], 3);
+
+        // Little tuft on top, like the Player's hair swoop
+        px(c.outline, 22, 2 + hy, 6, 3);
+        px(c.fur, 23, 3 + hy, 4, 2);
+        px(c.furLight, 23, 3 + hy, 2, 1);
+        px(c.fur, 24, 2 + hy, 2, 1);
 
         // Muzzle
-        ellipse(c.snout, 24, 19 + b, 6, 5);
-        ellipse(c.snoutLight, 24, 17 + b, 4, 2);
+        chunk(c.snout, 18, 15 + hy, 12, 9);
+        px(c.snoutLight, 19, 16 + hy, 5, 2);
+        px(c.innerEar, 19, 22 + hy, 10, 1);
 
         // Nose (rounded corners) + shine
-        px(c.nose, 22, 15 + b, 5, 3);
-        px(c.nose, 21, 16 + b, 1, 1);
-        px(c.nose, 27, 16 + b, 1, 1);
-        px(c.noseShine, 23, 15 + b, 2, 1);
+        px(c.nose, 22, 15 + hy, 5, 3);
+        px(c.nose, 21, 16 + hy, 1, 1);
+        px(c.nose, 27, 16 + hy, 1, 1);
+        px(c.noseShine, 23, 15 + hy, 2, 1);
 
         // Nose-to-mouth line, open mouth with a little tongue
-        px(c.furDark, 24, 18 + b, 1, 3);
-        px(c.mouth, 22, 21 + b, 5, 2);
-        px(c.tongue, 23, 22 + b, 3, 1);
+        px(c.furDark, 24, 18 + hy, 1, 3);
+        px(c.mouth, 22, 21 + hy, 5, 2);
+        px(c.tongue, 23, 22 + hy, 3, 1);
 
-        // Small eyes + heavy brows
-        for (const ex of [18, 30]) {
-            px(c.furDark, ex - 1, 9 + b, 4, 1);
-            px(c.nose, ex, 11 + b, 2, 2);
-            px(c.eyeShine, ex, 11 + b, 1, 1);
+        // Eyes with a shine, like the Player's
+        for (const ex of [16, 31]) {
+            px(c.furDark, ex - 1, 9 + hy, 5, 1);
+            px(c.nose, ex, 11 + hy, 3, 3);
+            px(c.eyeShine, ex, 11 + hy, 1, 1);
         }
 
-        // Cheek fur
-        px(c.furLight, 14, 18 + b, 3, 1);
-        px(c.furLight, 33, 18 + b, 3, 1);
+        // Blush under the eyes
+        px(c.blush, 14, 16 + hy, 3, 1);
+        px(c.blush, 32, 16 + hy, 3, 1);
+
+        // ---------- Legs: stretched toward us, soles showing ----------
+
+        for (const lx of [9, 26]) {
+            const leg: Part = [lx, 42, 15, 12, 2];
+
+            outline([leg]);
+            fur(leg, 2);
+
+            // Sole pad + toe pads
+            chunk(c.snout, lx + 3, 47, 9, 5);
+            px(c.snoutLight, lx + 4, 48, 4, 1);
+
+            px(c.snout, lx + 3, 44, 2, 2);
+            px(c.snout, lx + 6, 43, 2, 2);
+            px(c.snout, lx + 9, 44, 2, 2);
+        }
 
         // ---------- Right arm (screen right) holding the pole ----------
+        //
+        // The fist is only about twice the pole's width and closes around
+        // it: thumb over the top, three fingers wrapped across the front,
+        // pole showing above and below.
 
-        outline([[39.5, 33, 5, 9], [42, 41, 4, 4], [46, 41, 3.5, 5]]);
-        shaded(39.5, 33, 5, 9);
-        shaded(42, 41, 4, 4);
-        shaded(46, 41, 3.5, 5);
+        const rUpper: Part = [33, 30 + b, 9, 9];
+        const rFore: Part = [37, 33, 7, 6];
+        const rFist: Part = [42, 34, 8, 7];
+
+        outline([rUpper, rFore, rFist]);
+        fur(rUpper);
+        fur(rFore, 2);
+        fur(rFist, 1);
+
+        // Three fingers: dark gaps, with the fingertips curling past the pole
+        px(c.furDark, 45, 36, 5, 1);
+        px(c.furDark, 45, 38, 5, 1);
+        px(c.furLight, 45, 35, 2, 1);
+        px(c.furLight, 45, 37, 2, 1);
+        px(c.furLight, 45, 39, 2, 1);
+
+        // Thumb pressed over the top of the fist
+        px(c.outline, 43, 32, 4, 3);
+        px(c.fur, 44, 33, 2, 2);
+        px(c.furLight, 44, 33, 1, 1);
+        px(c.furDark, 43, 34, 4, 1);
+
+        // Wrist crease
+        px(c.furDark, 42, 35, 1, 5);
+
+        // Contact shadow on the pole under the fist
+        px(c.poleDark, POLE_X - 1, 42, 2, 2);
+
+        // ---------- Left arm (screen left), resting on his knee ----------
+
+        const lUpper: Part = [3, 31 + b, 9, 11];
+        const lPaw: Part = [4, 40, 9, 8];
+
+        outline([lUpper, lPaw]);
+        fur(lUpper);
+        fur(lPaw, 1);
 
         // Knuckles + claws
-        px(c.furDark, 45, 38, 1, 4);
-        px(c.furDark, 47, 38, 1, 4);
-
-        // ---------- Left arm (screen left), resting at his side ----------
-
-        outline([[9.5, 33, 5, 9], [8.5, 41, 4, 5], [8, 46, 3.5, 4]]);
-        shaded(9.5, 33, 5, 9);
-        shaded(8.5, 41, 4, 5);
-        shaded(8, 46, 3.5, 4);
-
-        // Knuckles + claws
-        px(c.furDark, 7, 44, 1, 3);
-        px(c.furDark, 9, 44, 1, 3);
-        px(c.claw, 6, 50);
-        px(c.claw, 8, 50);
-        px(c.claw, 10, 50);
+        px(c.furDark, 7, 43, 1, 3);
+        px(c.furDark, 9, 43, 1, 3);
+        px(c.claw, 5, 48);
+        px(c.claw, 7, 48);
+        px(c.claw, 9, 48);
 
         g.generateTexture(key, TEXTURE_SIZE.width, TEXTURE_SIZE.height);
         g.destroy();
