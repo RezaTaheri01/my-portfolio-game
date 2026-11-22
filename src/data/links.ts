@@ -13,3 +13,9 @@ export const PROFILE_LINKS: InteractableLink[] = [
   { label: "Email", url: "mailto:reza.taheri.pgmr@gmail.com" },
   { label: "Telegram", url: "https://t.me/RezaTaheri001" },
 ];
+
+// Named link sets that dialogue nodes can reference: `"links": "profile"`.
+// Keeping them here means URLs live in one place, not scattered in dialogue JSON.
+export const LINK_SETS: Record<string, InteractableLink[]> = {
+  profile: PROFILE_LINKS,
+};

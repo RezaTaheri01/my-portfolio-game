@@ -1,7 +1,6 @@
 import Phaser from "phaser";
 import { GAME_FONT } from "../../game/theme";
 import type { IInteractable } from "../IInteractable";
-import type { InteractableLink } from "../../data/links";
 
 export interface LobbyInteractableConfig {
     x: number;
@@ -10,9 +9,8 @@ export interface LobbyInteractableConfig {
     boardWidth: number;
     boardHeight: number;
     signTitle: string;
-    title: string;
-    dialogs: string[];
-    links?: InteractableLink[];
+    /** Dialogue opened on interact (public/data/dialogues/*.json). */
+    dialogueId: string;
 }
 
 const BOARD_Y = -75;
@@ -24,9 +22,7 @@ export class LobbyInteractable
     extends Phaser.GameObjects.Container
     implements IInteractable
 {
-    public readonly title: string;
-    public readonly dialogs: string[];
-    public readonly links?: InteractableLink[];
+    public readonly dialogueId: string;
 
     private readonly glow: Phaser.GameObjects.Arc;
     private readonly firefly: Phaser.GameObjects.Container;
@@ -38,9 +34,7 @@ export class LobbyInteractable
     constructor(scene: Phaser.Scene, config: LobbyInteractableConfig) {
         super(scene, config.x, config.y);
 
-        this.title = config.title;
-        this.dialogs = config.dialogs;
-        this.links = config.links;
+        this.dialogueId = config.dialogueId;
 
         const { boardWidth: w, boardHeight: h } = config;
         const halfW = w / 2;

@@ -45,33 +45,8 @@ const PALETTE = {
 // ------------------------------------------------------------
 
 export class SajjadNPC extends Phaser.GameObjects.Container {
-    public readonly title = "Sajjad";
-
-    public readonly dialogs: string[] = [
-        `"Where's Reza? Honestly, I have no idea.\n\nProbably in his cave creating something.\n\nOr debugging a single line of code for three hours. You know how it is."`,
-
-        `"Yeah, I'm Sajjad. Reza's best friend.\n\nWe go all the way back to high school.\n\nWe ended up at different universities for Computer Engineering, but honestly? We probably talked online more than most people do in person."`,
-
-        `"Don't worry, I'm not lost.\n\nI know exactly where I am.\n\n...Probably."`,
-
-        `"Me and Reza go way back.\n\nAfter high school, we both went off to study Computer Engineering, but we stayed glued to Telegram the whole time.\n\nWe basically grew up on the same compiler errors."`,
-
-        `"Nice portfolio, though.\n\nI helped.\n\nEmotionally. Mostly by just chatting with him while he coded at 3 AM."`,
-
-        `"He's an ISTJ, you know. Checks every detail twice.\n\nMe? I check once."`,
-
-        `"Twenty-five, single, and he still owes the military a visit.\n\nBut hey — a 16.5 GPA and a GitHub full of side projects?\n\nYeah. The guy's doing alright."`,
-    ];
-
-    // After the dialogs above have been shown `runs` times,
-    // talking to Sajjad shows these instead.
-    public readonly progression = {
-        runs: 2,
-        endDialogs: [
-            `"Okay, okay, you've heard the whole story. Twice.\n\nAt this point you know Reza better than his own mother does."`,
-            `"Go on, explore. The fire's not going anywhere.\n\nAnd neither am I."`,
-        ],
-    };
+    /** Dialogue opened on interact. Content: public/data/dialogues/*.json */
+    public readonly dialogueId: string;
 
     // Textures are identical for every Sajjad, so they're generated once
     // and shared. A ref count removes them when the last instance dies.
@@ -87,8 +62,15 @@ export class SajjadNPC extends Phaser.GameObjects.Container {
 
     private nearbyTweens: Phaser.Tweens.Tween[] = [];
 
-    constructor(scene: Phaser.Scene, x: number, y: number) {
+    constructor(
+        scene: Phaser.Scene,
+        x: number,
+        y: number,
+        dialogueId = "lobby.sajjad"
+    ) {
         super(scene, x, y);
+
+        this.dialogueId = dialogueId;
 
         SajjadNPC.instanceCount++;
         SajjadNPC.ensureTextures(scene);
@@ -391,4 +373,4 @@ export class SajjadNPC extends Phaser.GameObjects.Container {
             SajjadNPC.releaseTextures(textures);
         }
     }
-}
+}

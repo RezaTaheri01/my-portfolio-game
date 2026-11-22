@@ -1,0 +1,185 @@
+{
+  "dialogues": [
+    {
+      "id": "lobby.welcome",
+      "speaker": "Welcome to REZA's Dev World",
+      "start": "main",
+      "nodes": {
+        "main": {
+          "pages": [
+            [
+              "Welcome, traveler!",
+              "",
+              "You've just stepped into Reza's world.",
+              "",
+              "Reza is a Computer Engineer and Unity Developer — a sharp-eyed ISTJ who reads patterns like a detective and logs bugs like a bounty hunter.",
+              "",
+              "He builds games in C#, crafts backends with Python & Django, ships Telegram bots, and is currently leveling up in Machine Learning.",
+              "",
+              "Explore the world to uncover his projects, experiments, and skills.",
+              "",
+              "Every path leads somewhere different in his journey.",
+              "",
+              "Take your time. There's a lot to discover!"
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "id": "lobby.links",
+      "speaker": "Find Reza Online",
+      "start": "main",
+      "nodes": {
+        "main": {
+          "pages": [
+            [
+              "Want to get in touch, or see the work behind the world?",
+              "",
+              "Pick a link below — click it, tap it, or press its number key."
+            ]
+          ],
+          "links": "profile"
+        }
+      }
+    },
+    {
+      "id": "lobby.sajjad",
+      "speaker": "Sajjad",
+      "start": "intro",
+      "nodes": {
+        "intro": {
+          "pages": [
+            [
+              "\"Where's Reza? Honestly, I have no idea.",
+              "",
+              "Probably in his cave creating something.",
+              "",
+              "Or debugging a single line of code for three hours. You know how it is.\""
+            ],
+            [
+              "\"Yeah, I'm Sajjad. Reza's best friend.",
+              "",
+              "We go all the way back to high school.",
+              "",
+              "We ended up at different universities for Computer Engineering, but honestly? We probably talked online more than most people do in person.\""
+            ],
+            [
+              "\"Don't worry, I'm not lost.",
+              "",
+              "I know exactly where I am.",
+              "",
+              "...Probably.\""
+            ],
+            [
+              "\"Me and Reza go way back.",
+              "",
+              "After high school, we both went off to study Computer Engineering, but we stayed glued to Telegram the whole time.",
+              "",
+              "We basically grew up on the same compiler errors.\""
+            ],
+            [
+              "\"Nice portfolio, though.",
+              "",
+              "I helped.",
+              "",
+              "Emotionally. Mostly by just chatting with him while he coded at 3 AM.\""
+            ],
+            [
+              "\"He's an ISTJ, you know. Checks every detail twice.",
+              "",
+              "Me? I check once.\""
+            ],
+            [
+              "\"Twenty-five, single, and he still owes the military a visit.",
+              "",
+              "But hey — a 16.5 GPA and a GitHub full of side projects?",
+              "",
+              "Yeah. The guy's doing alright.\""
+            ]
+          ],
+          "repeat": {
+            "runs": 2,
+            "then": "outro"
+          }
+        },
+        "outro": {
+          "pages": [
+            [
+              "\"Okay, okay, you've heard the whole story. Twice.",
+              "",
+              "At this point you know Reza better than his own mother does.\""
+            ],
+            [
+              "\"Go on, explore. The fire's not going anywhere.",
+              "",
+              "And neither am I.\""
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "id": "lobby.khers",
+      "speaker": "Khers the Bear",
+      "start": "intro",
+      "nodes": {
+        "intro": {
+          "pages": [
+            [
+              "\"Grrr... oh! Sorry. Hello there.",
+              "",
+              "Don't mind the flag. It's the Lion and Sun, an old emblem of Persia.",
+              "",
+              "I carry it with pride. And it only gets heavy after the first hour.\""
+            ],
+            [
+              "\"Yes, I'm a bear. Yes, I can talk.",
+              "",
+              "No, I don't eat portfolios.",
+              "",
+              "But I did eat the last of Sajjad's snacks.\""
+            ],
+            [
+              "\"Reza showed me his projects. Games, bots, backends, machine learning...",
+              "",
+              "I told him: that's a lot of work for one human.",
+              "",
+              "He said it's only a lot if you sleep.\""
+            ],
+            [
+              "\"Fun fact: the lion on my flag holds a sword and the sun rises behind it.",
+              "",
+              "Meanwhile, I just hold a stick and hope the wind is kind.\""
+            ],
+            [
+              "\"I like it here by the campfire.",
+              "",
+              "Good fire, good company, and fireflies that don't try to run away from me.",
+              "",
+              "...Most animals do, strangely.\""
+            ]
+          ],
+          "repeat": {
+            "runs": 2,
+            "then": "outro"
+          }
+        },
+        "outro": {
+          "pages": [
+            [
+              "\"You've heard all my stories. Twice.",
+              "",
+              "I'm a bear of few words. Okay, many words. But now they're finished.\""
+            ],
+            [
+              "\"Go on, explore.",
+              "",
+              "I'll keep the flag up high. And the fire warm.\""
+            ]
+          ]
+        }
+      }
+    }
+  ]
+}
