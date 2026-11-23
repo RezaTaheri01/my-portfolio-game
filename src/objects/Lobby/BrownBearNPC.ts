@@ -76,29 +76,8 @@ const FLAG = {
 // ------------------------------------------------------------
 
 export class BrownBearNPC extends Phaser.GameObjects.Container {
-    public readonly title = "Khers the Bear";
-
-    public readonly dialogs: string[] = [
-        `"Grrr... oh! Sorry. Hello there.\n\nDon't mind the flag. It's the Lion and Sun, an old emblem of Persia.\n\nI carry it with pride. And it only gets heavy after the first hour."`,
-
-        `"Yes, I'm a bear. Yes, I can talk.\n\nNo, I don't eat portfolios.\n\nBut I did eat the last of Sajjad's snacks."`,
-
-        `"Reza showed me his projects. Games, bots, backends, machine learning...\n\nI told him: that's a lot of work for one human.\n\nHe said it's only a lot if you sleep."`,
-
-        `"Fun fact: the lion on my flag holds a sword and the sun rises behind it.\n\nMeanwhile, I just hold a stick and hope the wind is kind."`,
-
-        `"I like it here by the campfire.\n\nGood fire, good company, and fireflies that don't try to run away from me.\n\n...Most animals do, strangely."`,
-    ];
-
-    // After the dialogs above have been shown `runs` times,
-    // talking to the bear shows these instead.
-    public readonly progression = {
-        runs: 2,
-        endDialogs: [
-            `"You've heard all my stories. Twice.\n\nI'm a bear of few words. Okay, many words. But now they're finished."`,
-            `"Go on, explore.\n\nI'll keep the flag up high. And the fire warm."`,
-        ],
-    };
+    /** Dialogue opened on interact. Content: public/data/dialogues/*.json */
+    public readonly dialogueId: string;
 
     // Textures are identical for every bear, so they're generated once
     // and shared. A ref count removes them when the last instance dies.
@@ -115,8 +94,15 @@ export class BrownBearNPC extends Phaser.GameObjects.Container {
 
     private nearbyTweens: Phaser.Tweens.Tween[] = [];
 
-    constructor(scene: Phaser.Scene, x: number, y: number) {
+    constructor(
+        scene: Phaser.Scene,
+        x: number,
+        y: number,
+        dialogueId = "lobby.khers"
+    ) {
         super(scene, x, y);
+
+        this.dialogueId = dialogueId;
 
         BrownBearNPC.instanceCount++;
         BrownBearNPC.ensureTextures(scene);
@@ -667,4 +653,4 @@ export class BrownBearNPC extends Phaser.GameObjects.Container {
             BrownBearNPC.releaseTextures(textures);
         }
     }
-}
+}

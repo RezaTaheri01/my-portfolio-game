@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { BootScene } from "../scenes/Lobby/LobbyScene";
+import { SCENES } from "../scenes";
 
 export const gameConfig: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -22,7 +22,7 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
     },
   },
 
-  scene: [BootScene],
+  scene: SCENES,
 
   scale: {
     mode: Phaser.Scale.RESIZE,
