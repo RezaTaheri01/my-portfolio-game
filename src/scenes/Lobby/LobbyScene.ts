@@ -30,7 +30,6 @@ const COLORS = {
 };
 
 interface ForestLayer {
-  depth: number;
   count: number;
   step: number;
   startX: number;
@@ -49,7 +48,7 @@ interface ForestLayer {
 }
 
 const FAR_FOREST: ForestLayer = {
-  depth: -32, count: 35, step: 82, startX: -20, baseY: 590,
+  count: 35, step: 82, startX: -20, baseY: 590,
   height: [170, 120, 47], width: [75, 55, 19],
   trunkColor: 0x172d25, leafColors: [0x193529, 0x1c3a2d],
   trunk: [0.42, 0.16, 0.65],
@@ -58,7 +57,7 @@ const FAR_FOREST: ForestLayer = {
 };
 
 const MID_FOREST: ForestLayer = {
-  depth: -29, count: 24, step: 118, startX: -45, baseY: 640,
+  count: 24, step: 118, startX: -45, baseY: 640,
   height: [220, 130, 61], width: [100, 65, 23],
   trunkColor: 0x182e22, leafColors: [0x203e2b, 0x25442f],
   trunk: [0.4, 0.2, 0.7],
@@ -256,22 +255,30 @@ export class LobbyScene extends Phaser.Scene {
   // ========================================
 
   private createOutdoorLobby(): void {
-    this.createSky();
-    this.createForest(FAR_FOREST);
-    this.createForest(MID_FOREST);
+    this.createSky(); // one gradient quad + the moon: cheap, stays live
 
-    // Backdrop fill, extended down to the bottom of the world
-    this.add
-      .graphics()
-      .setDepth(-20)
-      .fillStyle(COLORS.ground, 1)
-      .fillRect(0, GROUND_Y, WORLD_WIDTH, WORLD_HEIGHT - GROUND_Y);
+    // PERFORMANCE: the scenery below is static, but a Phaser Graphics object
+    // re-builds and re-draws every shape EVERY FRAME (~700 ellipses/circles here,
+    // across the whole 2000px world, even off-screen). Drawing it once into a
+    // texture turns that into a single image that the camera can cull.
+    // Layer order = draw order below (it matches the old depths -37 ... -4).
+    this.makeTexture("lobby-scenery", WORLD_WIDTH, WORLD_HEIGHT, (g) => {
+      this.drawStars(g);
+      this.drawForest(g, FAR_FOREST);
+      this.drawForest(g, MID_FOREST);
 
-    this.createBushes();
-    this.createPath();
-    this.createForegroundFoliage();
-    this.createGroundDetails();
-    this.createMushrooms();
+      // Backdrop fill, extended down to the bottom of the world
+      g.fillStyle(COLORS.ground, 1)
+        .fillRect(0, GROUND_Y, WORLD_WIDTH, WORLD_HEIGHT - GROUND_Y);
+
+      this.drawBushes(g);
+      this.drawPath(g);
+      this.drawForegroundFoliage(g);
+      this.drawGroundDetails(g);
+    });
+    this.add.image(0, 0, "lobby-scenery").setOrigin(0, 0).setDepth(-37);
+
+    this.createMushrooms(); // small (about 30 shapes); sits at depth 1 among the campfire effects
   }
 
   private createSky(): void {
@@ -285,11 +292,12 @@ export class LobbyScene extends Phaser.Scene {
     // Moon (second circle carves out a crescent)
     this.add.circle(1430, 125, 48, 0xd5d9ad, 0.9).setDepth(-39);
     this.add.circle(1450, 112, 45, COLORS.skyTop, 0.65).setDepth(-38);
+  }
 
-    const stars = this.add.graphics().setDepth(-37);
+  private drawStars(g: Graphics): void {
     for (let i = 0; i < 110; i++) {
-      stars.fillStyle(0xdce8bd, 0.35 + (i % 4) * 0.12);
-      stars.fillCircle(
+      g.fillStyle(0xdce8bd, 0.35 + (i % 4) * 0.12);
+      g.fillCircle(
         (i * 173) % WORLD_WIDTH,
         25 + ((i * 97) % 260),
         i % 5 === 0 ? 2 : 1
@@ -297,8 +305,7 @@ export class LobbyScene extends Phaser.Scene {
     }
   }
 
-  private createForest(layer: ForestLayer): void {
-    const g = this.add.graphics().setDepth(layer.depth);
+  private drawForest(g: Graphics, layer: ForestLayer): void {
     const { baseY, trunk } = layer;
 
     for (let i = 0; i < layer.count; i++) {
@@ -324,9 +331,7 @@ export class LobbyScene extends Phaser.Scene {
     }
   }
 
-  private createBushes(): void {
-    const g = this.add.graphics().setDepth(-18);
-
+  private drawBushes(g: Graphics): void {
     for (let i = 0; i < 75; i++) {
       const x = (i * 137) % WORLD_WIDTH;
       const y = 520 + ((i * 31) % 105);
@@ -339,15 +344,12 @@ export class LobbyScene extends Phaser.Scene {
     }
   }
 
-  private createPath(): void {
-    const g = this.add.graphics().setDepth(-16);
+  private drawPath(g: Graphics): void {
     ellipse(g, 0x594633, 1150, 645, 1700, 55, 0.9);
     ellipse(g, 0x76583a, 1150, 641, 1500, 18, 0.45);
   }
 
-  private createForegroundFoliage(): void {
-    const g = this.add.graphics().setDepth(-5);
-
+  private drawForegroundFoliage(g: Graphics): void {
     for (const startX of [0, WORLD_WIDTH - 180]) {
       for (let i = 0; i < 18; i++) {
         const x = startX + (i % 6) * 32;
@@ -362,9 +364,7 @@ export class LobbyScene extends Phaser.Scene {
     }
   }
 
-  private createGroundDetails(): void {
-    const g = this.add.graphics().setDepth(-4);
-
+  private drawGroundDetails(g: Graphics): void {
     for (let i = 0; i < 45; i++) {
       const size = 5 + (i % 9);
       ellipse(
