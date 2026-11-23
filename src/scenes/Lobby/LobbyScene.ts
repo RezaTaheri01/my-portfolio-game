@@ -8,6 +8,7 @@ import { queueBundles } from "../../systems/AssetLoader";
 import { UpdateList, spawnEntities } from "../../systems/SceneContent";
 import { LOBBY } from "../../data/scenes/lobby";
 import { GAME_FONT } from "../../game/theme";
+import { attachDebugOverlay } from "../../ui/DebugOverlay";
 
 // ========================================
 // CONFIG
@@ -99,7 +100,7 @@ export class LobbyScene extends Phaser.Scene {
     this.entityUpdates.clear();
     this.physics.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
 
-    this.lights.enable().setAmbientColor(0x999b80);
+    // this.lights.enable().setAmbientColor(0x999b80);
 
     this.createTextures();
     this.createOutdoorLobby();
@@ -124,6 +125,7 @@ export class LobbyScene extends Phaser.Scene {
     this.setupCamera();
     this.createUI();
     this.createAudio();
+    attachDebugOverlay(this)
   }
 
   update(time: number): void {
@@ -597,4 +599,4 @@ export class LobbyScene extends Phaser.Scene {
       })
       .setDepth(3);
   }
-}
+}

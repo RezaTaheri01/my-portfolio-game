@@ -25,7 +25,7 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
   scene: SCENES,
 
   scale: {
-    mode: Phaser.Scale.RESIZE,
+    mode: Phaser.Scale.EXPAND,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
-};
+};
