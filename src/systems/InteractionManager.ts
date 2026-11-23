@@ -5,6 +5,7 @@ import { GAME_FONT, UI_COLORS as COLORS } from "../game/theme";
 import type { IInteractable } from "../objects/IInteractable";
 import { SFX } from "../data/audio";
 import { AudioManager } from "./AudioManager";
+import { InputHints } from "./InputHints";
 import type { DialogueManager } from "./DialogueManager";
 
 // Anything interactable also needs a world position to measure distance from.
@@ -30,7 +31,11 @@ export class InteractionManager {
 
   private readonly isTouch: boolean;
 
-  private readonly interactKey: Phaser.Input.Keyboard.Key;
+  // Interact is the same button as jump: SPACE on keyboard, A on a gamepad.
+  // Presses are queued by events and consumed once per frame in update().
+  private interactQueued = false;
+  private closeQueued = false;
+  private unsubscribeHints?: () => void;
   private readonly escapeKey: Phaser.Input.Keyboard.Key;
   private readonly numberKeys: Phaser.Input.Keyboard.Key[];
 
@@ -43,7 +48,6 @@ export class InteractionManager {
     this.isTouch = scene.sys.game.device.input.touch;
 
     const keyboard = scene.input.keyboard!;
-    this.interactKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
     this.escapeKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
 
     // 1-9 pick the matching option (link or choice) while a dialogue is showing.
@@ -62,7 +66,7 @@ export class InteractionManager {
         backgroundColor: COLORS.forestCss,
         padding: { x: 14, y: 9 },
       })
-      .setText(this.isTouch ? "Tap  —  Interact" : "E  —  Interact")
+      .setText("")
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(UI_DEPTH)
@@ -71,6 +75,13 @@ export class InteractionManager {
 
     // Clicking / tapping the prompt acts as pressing E.
     this.prompt.on(Phaser.Input.Events.POINTER_DOWN, this.onPromptTap, this);
+
+    // Prompt text follows the active device (keyboard / controller).
+    this.refreshPromptText();
+    this.unsubscribeHints = InputHints.get(scene).onChange(() => this.refreshPromptText());
+
+    keyboard.on("keydown-SPACE", this.onSpaceDown);
+    scene.input.gamepad?.on(Phaser.Input.Gamepad.Events.BUTTON_DOWN, this.onPadButton);
 
     this.layout();
 
@@ -85,6 +96,14 @@ export class InteractionManager {
   /** True while a dialogue is showing (handy for locking player movement). */
   public get isDialogOpen(): boolean {
     return this.dialogue.isOpen;
+  }
+
+  /**
+   * True while the jump button should be reserved for interacting
+   * (something is in range, or a dialogue is open). Pass to Player.update().
+   */
+  public get capturesJump(): boolean {
+    return this.dialogue.isOpen || this.nearbyObject !== null;
   }
 
   public add(interactable: Interactable): void {
@@ -103,11 +122,14 @@ export class InteractionManager {
   }
 
   public update(): void {
-    const interactPressed = Phaser.Input.Keyboard.JustDown(this.interactKey);
+    const interactPressed = this.interactQueued;
+    const closePressed = this.closeQueued;
+    this.interactQueued = false;
+    this.closeQueued = false;
 
     // Input is read here, once per frame, whoever opened the dialogue.
     if (this.dialogue.isOpen) {
-      if (Phaser.Input.Keyboard.JustDown(this.escapeKey)) {
+      if (Phaser.Input.Keyboard.JustDown(this.escapeKey) || closePressed) {
         this.dialogue.close();
       } else if (interactPressed) {
         this.dialogue.advance();
@@ -127,6 +149,9 @@ export class InteractionManager {
   }
 
   public destroy(): void {
+    this.unsubscribeHints?.();
+    this.scene.input.keyboard?.off("keydown-SPACE", this.onSpaceDown);
+    this.scene.input.gamepad?.off(Phaser.Input.Gamepad.Events.BUTTON_DOWN, this.onPadButton);
     this.scene.scale.off("resize", this.layout, this);
     this.prompt.destroy();
   }
@@ -134,6 +159,20 @@ export class InteractionManager {
   // ========================================
   // INTERACTION
   // ========================================
+
+  private onSpaceDown = (event: KeyboardEvent): void => {
+    if (!event.repeat) this.interactQueued = true;
+  };
+
+  private onPadButton = (_pad: Phaser.Input.Gamepad.Gamepad, button: Phaser.Input.Gamepad.Button): void => {
+    if (button.index === 0) this.interactQueued = true; // A
+    if (button.index === 1) this.closeQueued = true; // B
+  };
+
+  private refreshPromptText(): void {
+    const label = InputHints.get(this.scene).labels.interact;
+    this.prompt.setText(this.isTouch ? "Tap  —  Interact" : `${label}  —  Interact`);
+  }
 
   private onPromptTap(): void {
     if (this.nearbyObject && !this.dialogue.isOpen) {

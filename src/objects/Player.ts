@@ -17,6 +17,9 @@ const JUMP_CUT_MULTIPLIER = 0.45;
 const COYOTE_TIME = 100;
 const JUMP_BUFFER_TIME = 120;
 
+// Analog stick values below this are ignored (drift).
+const PAD_DEADZONE = 0.3;
+
 // Distance from the physics body's bottom to the character's feet.
 const VISUAL_FEET_OFFSET = 28;
 
@@ -58,6 +61,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   private touchButtons?: Record<TouchAction, TouchButton>;
   private touchJumpJustPressed = false;
+  private padJumpWasDown = false;
 
   private lastGroundedTime = -Infinity;
   private jumpPressedTime = -Infinity;
@@ -243,30 +247,60 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   // ========================================
+  // GAMEPAD
+  // ========================================
+
+  /** Reads the first connected pad (needs `input: { gamepad: true }` in the game config). */
+  private readPad(): { left: boolean; right: boolean; jumpDown: boolean; jumpPressed: boolean } {
+    const pad = this.scene.input.gamepad?.getAll()[0];
+    if (!pad) {
+      this.padJumpWasDown = false;
+      return { left: false, right: false, jumpDown: false, jumpPressed: false };
+    }
+
+    const stickX = pad.leftStick.x;
+    const jumpDown = pad.A; // bottom face button (Xbox A / PlayStation Cross)
+    const jumpPressed = jumpDown && !this.padJumpWasDown;
+    this.padJumpWasDown = jumpDown;
+
+    return {
+      left: pad.left || stickX < -PAD_DEADZONE,
+      right: pad.right || stickX > PAD_DEADZONE,
+      jumpDown,
+      jumpPressed,
+    };
+  }
+
+  // ========================================
   // UPDATE
   // ========================================
 
-  public update(): void {
+  /** `suppressJump`: the jump button is being used for something else this frame (interacting). */
+  public update(suppressJump = false): void {
     const body = this.body as Phaser.Physics.Arcade.Body;
     const now = this.scene.time.now;
 
     // ---------- Input ----------
 
+    const pad = this.readPad();
+
     const left =
-      this.cursors.left.isDown || this.keys.A.isDown || this.isTouchDown("left");
+      this.cursors.left.isDown || this.keys.A.isDown || this.isTouchDown("left") || pad.left;
     const right =
-      this.cursors.right.isDown || this.keys.D.isDown || this.isTouchDown("right");
+      this.cursors.right.isDown || this.keys.D.isDown || this.isTouchDown("right") || pad.right;
 
     const jumpKeys = [this.cursors.up, this.keys.W, this.keys.SPACE];
 
     // map() so every key's JustDown is consumed, not just the first one pressed.
-    const jumpPressed =
+    const jumpPressedRaw =
       jumpKeys.map((key) => Phaser.Input.Keyboard.JustDown(key)).some(Boolean) ||
-      this.touchJumpJustPressed;
+      this.touchJumpJustPressed ||
+      pad.jumpPressed;
     this.touchJumpJustPressed = false;
+    const jumpPressed = jumpPressedRaw && !suppressJump;
 
     const jumpDown =
-      jumpKeys.some((key) => key.isDown) || this.isTouchDown("jump");
+      jumpKeys.some((key) => key.isDown) || this.isTouchDown("jump") || pad.jumpDown;
 
     if (jumpPressed) this.jumpPressedTime = now;
 

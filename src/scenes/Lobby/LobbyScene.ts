@@ -9,6 +9,7 @@ import { UpdateList, spawnEntities } from "../../systems/SceneContent";
 import { LOBBY } from "../../data/scenes/lobby";
 import { GAME_FONT } from "../../game/theme";
 import { attachDebugOverlay } from "../../ui/DebugOverlay";
+import { InputHints } from "../../systems/InputHints";
 
 // ========================================
 // CONFIG
@@ -124,11 +125,12 @@ export class LobbyScene extends Phaser.Scene {
     this.setupCamera();
     this.createUI();
     this.createAudio();
+    this.createMuteButton();
     attachDebugOverlay(this)
   }
 
   update(time: number): void {
-    this.player.update();
+    this.player.update(this.interactionManager.capturesJump);
     this.entityUpdates.update(time);
     this.interactionManager.update();
     this.playerLight.setPosition(this.player.x, this.player.y - 10);
@@ -188,14 +190,23 @@ export class LobbyScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(100);
 
-    this.add
-      .text(
-        24, 52,
-        "A / D or ARROWS: Move     SPACE: Jump     E: Interact     M: Mute",
-        style("13px", "#d5dfc0", 3)
-      )
-      .setScrollFactor(0)
-      .setDepth(100);
+    const isTouch = this.sys.game.device.input.touch || navigator.maxTouchPoints > 0;
+
+    if (!isTouch) {
+      const hints = InputHints.get(this);
+      const hint = this.add
+        .text(24, 52, "", style("13px", "#d5dfc0", 3))
+        .setScrollFactor(0)
+        .setDepth(100);
+
+      const refresh = (): void => {
+        hint.setText(hints.labels.hint);
+      };
+
+      refresh();
+      const off = hints.onChange(refresh);
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, off);
+    }
   }
 
   // ========================================
@@ -598,5 +609,74 @@ export class LobbyScene extends Phaser.Scene {
         blendMode: Phaser.BlendModes.ADD,
       })
       .setDepth(3);
+
+  }
+
+  // ========================================
+  // Music Mute Button
+  // ========================================
+  private createMuteButton(): void {
+    const audio = AudioManager.get(this);
+
+    const circle = this.add
+      .circle(0, 0, 24, 0x172c23, 0.82)
+      .setStrokeStyle(2, 0x3d5940, 0.95)
+      .setScrollFactor(0)
+      .setDepth(900)
+      .setInteractive({ useHandCursor: true });
+
+    const icon = this.add.graphics().setScrollFactor(0).setDepth(901);
+
+    const draw = (): void => {
+      icon.clear();
+      icon.fillStyle(0xfff0d2, 1);
+      icon.fillRect(-10, -4, 5, 8);
+      icon.fillTriangle(-5, -4, 2, -9, 2, 9);
+      icon.fillTriangle(-5, -4, 2, 9, -5, 4);
+
+      icon.lineStyle(2.5, audio.isMuted ? 0xffa34d : 0xfff0d2, 1);
+      if (audio.isMuted) {
+        icon.lineBetween(6, -5, 14, 5);
+        icon.lineBetween(14, -5, 6, 5);
+      } else {
+        icon.beginPath();
+        icon.arc(3, 0, 7, -0.9, 0.9);
+        icon.strokePath();
+        icon.beginPath();
+        icon.arc(3, 0, 12, -0.9, 0.9);
+        icon.strokePath();
+      }
+    };
+
+    const layout = (): void => {
+      const x = this.scale.width - 40;
+      circle.setPosition(x, 40);
+      icon.setPosition(x, 40);
+    };
+
+    const toggle = (): void => {
+      audio.toggleMute();
+      draw();
+    };
+
+    circle.on(Phaser.Input.Events.POINTER_DOWN, toggle);
+
+    // Keep the icon in sync when M is pressed (runs after bindMuteKey's handler).
+    this.input.keyboard?.on("keydown-M", draw);
+
+    // Controller: Start button (index 9), read from the browser's Gamepad API.
+    const offPad = InputHints.get(this).onPadPress((index) => {
+      if (index === 9) toggle();
+    });
+
+    this.scale.on("resize", layout);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.scale.off("resize", layout);
+      this.input.keyboard?.off("keydown-M", draw);
+      offPad();
+    });
+
+    draw();
+    layout();
   }
 }

@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { GAME_FONT, UI_COLORS as COLORS } from "../game/theme";
+import { InputHints } from "../systems/InputHints";
 
 // ============================================================
 // DialogueBox: the visual component only (the panel at the bottom
@@ -42,6 +43,8 @@ export class DialogueBox {
   private readonly exit: Phaser.GameObjects.Text;
 
   private optionRows: Phaser.GameObjects.Text[] = [];
+  private actionLabel: string | null = null;
+  private unsubscribeHints?: () => void;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -83,7 +86,7 @@ export class DialogueBox {
     };
 
     this.action = button("", () => handlers.onAdvance());
-    this.exit = button(this.isTouch ? "Exit" : "ESC  Exit", () => handlers.onExit());
+    this.exit = button("", () => handlers.onExit());
 
     this.root = scene.add
       .container(0, 0, [
@@ -95,6 +98,7 @@ export class DialogueBox {
       .setVisible(false);
 
     scene.scale.on("resize", this.layout, this);
+    this.unsubscribeHints = InputHints.get(scene).onChange(() => this.refreshLabels());
   }
 
   get visible(): boolean {
@@ -106,12 +110,25 @@ export class DialogueBox {
     this.buildOptions(view.options);
     this.message.setText(view.text);
 
+    this.actionLabel = view.action;
     this.action.setVisible(view.action !== null);
-    if (view.action !== null) {
-      this.action.setText(this.isTouch ? view.action : `E  ${view.action}`);
-    }
+    this.refreshLabels();
 
     this.root.setVisible(true);
+    this.layout();
+  }
+
+  /** Button hints follow the active device: SPACE/ESC on keyboard, A/B on a controller. */
+  private refreshLabels(): void {
+    const labels = InputHints.get(this.scene).labels;
+
+    if (this.actionLabel !== null) {
+      this.action.setText(
+        this.isTouch ? this.actionLabel : `${labels.interact}  ${this.actionLabel}`
+      );
+    }
+    this.exit.setText(this.isTouch ? "Exit" : `${labels.exit}  Exit`);
+
     this.layout();
   }
 
@@ -123,6 +140,7 @@ export class DialogueBox {
   }
 
   destroy(): void {
+    this.unsubscribeHints?.();
     this.scene.scale.off("resize", this.layout, this);
     this.root.destroy();
   }
