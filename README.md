@@ -48,7 +48,7 @@ npm run dev
 - [x] Sequential dialogue system
 - [x] Complete movement and jump system
 - [x] Mobile touch controls
-- [ ] Polish the lobby environment
+- [x] Polish the lobby environment
 - [ ] Build About Me area
 - [ ] Build Unity District
 - [ ] Build Godot Valley
@@ -57,7 +57,7 @@ npm run dev
 - [ ] Build Contact Area
 - [ ] Add menus, audio, and transitions
 - [ ] Testing and optimization
-- [ ] Deployment
+- [x] Deployment
 
 ## 🤖 AI Acknowledgment
 
