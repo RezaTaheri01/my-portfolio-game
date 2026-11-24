@@ -23,6 +23,8 @@ export class LobbyInteractable
     implements IInteractable
 {
     public readonly dialogueId: string;
+    public readonly interactLabel = "Read";
+    public readonly bubbleOffsetY: number;
 
     private readonly glow: Phaser.GameObjects.Arc;
     private readonly firefly: Phaser.GameObjects.Container;
@@ -35,6 +37,7 @@ export class LobbyInteractable
         super(scene, config.x, config.y);
 
         this.dialogueId = config.dialogueId;
+        this.bubbleOffsetY = -BOARD_Y + config.boardHeight / 2 + 8; // top of the board
 
         const { boardWidth: w, boardHeight: h } = config;
         const halfW = w / 2;

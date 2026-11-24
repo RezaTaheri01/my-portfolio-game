@@ -5,7 +5,7 @@ import { GAME_FONT, UI_COLORS as COLORS } from "../game/theme";
 import type { IInteractable } from "../objects/IInteractable";
 import { SFX } from "../data/audio";
 import { AudioManager } from "./AudioManager";
-import { InputHints } from "./InputHints";
+import { InputHints, PAD_BUTTONS } from "./InputHints";
 import type { DialogueManager } from "./DialogueManager";
 
 // Anything interactable also needs a world position to measure distance from.
@@ -15,8 +15,10 @@ const INTERACTION_DISTANCE = 100;
 const UI_DEPTH = 1000;
 
 /**
- * Finds what the player can interact with and routes input (E / tap / ESC /
- * number keys) to the DialogueManager while a dialogue is open.
+ * Finds what the player can interact with and routes input (E / X / tap /
+ * ESC / number keys) to the DialogueManager while a dialogue is open.
+ * Interact has its own buttons (E, pad X, tapping the prompt); SPACE and pad A
+ * only ever jump.
  * Dialogue content and rendering live in DialogueManager / DialogueBox.
  */
 export class InteractionManager {
@@ -29,9 +31,7 @@ export class InteractionManager {
   // The object whose dialogue is open (so removing it can close the dialogue).
   private activeObject: Interactable | null = null;
 
-  private readonly isTouch: boolean;
-
-  // Interact is the same button as jump: SPACE on keyboard, A on a gamepad.
+  // Interact: E on keyboard, X on a gamepad, tap on touch. Jump is separate.
   // Presses are queued by events and consumed once per frame in update().
   private interactQueued = false;
   private closeQueued = false;
@@ -45,7 +45,6 @@ export class InteractionManager {
     this.scene = scene;
     this.player = player;
     this.dialogue = dialogue;
-    this.isTouch = scene.sys.game.device.input.touch;
 
     const keyboard = scene.input.keyboard!;
     this.escapeKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
@@ -73,14 +72,14 @@ export class InteractionManager {
       .setVisible(false)
       .setInteractive({ useHandCursor: true });
 
-    // Clicking / tapping the prompt acts as pressing E.
+    // Clicking / tapping the prompt acts as pressing the interact key.
     this.prompt.on(Phaser.Input.Events.POINTER_DOWN, this.onPromptTap, this);
 
     // Prompt text follows the active device (keyboard / controller).
     this.refreshPromptText();
     this.unsubscribeHints = InputHints.get(scene).onChange(() => this.refreshPromptText());
 
-    keyboard.on("keydown-SPACE", this.onSpaceDown);
+    keyboard.on("keydown-E", this.onInteractKey);
     scene.input.gamepad?.on(Phaser.Input.Gamepad.Events.BUTTON_DOWN, this.onPadButton);
 
     this.layout();
@@ -93,17 +92,12 @@ export class InteractionManager {
   // PUBLIC API
   // ========================================
 
-  /** True while a dialogue is showing (handy for locking player movement). */
-  public get isDialogOpen(): boolean {
-    return this.dialogue.isOpen;
-  }
-
   /**
-   * True while the jump button should be reserved for interacting
-   * (something is in range, or a dialogue is open). Pass to Player.update().
+   * True while an interaction is running (dialogue open). The scene passes
+   * this to Player.update() to lock walking and jumping.
    */
-  public get capturesJump(): boolean {
-    return this.dialogue.isOpen || this.nearbyObject !== null;
+  public get isInteracting(): boolean {
+    return this.dialogue.isOpen;
   }
 
   public add(interactable: Interactable): void {
@@ -150,7 +144,7 @@ export class InteractionManager {
 
   public destroy(): void {
     this.unsubscribeHints?.();
-    this.scene.input.keyboard?.off("keydown-SPACE", this.onSpaceDown);
+    this.scene.input.keyboard?.off("keydown-E", this.onInteractKey);
     this.scene.input.gamepad?.off(Phaser.Input.Gamepad.Events.BUTTON_DOWN, this.onPadButton);
     this.scene.scale.off("resize", this.layout, this);
     this.prompt.destroy();
@@ -160,18 +154,20 @@ export class InteractionManager {
   // INTERACTION
   // ========================================
 
-  private onSpaceDown = (event: KeyboardEvent): void => {
+  private onInteractKey = (event: KeyboardEvent): void => {
     if (!event.repeat) this.interactQueued = true;
   };
 
   private onPadButton = (_pad: Phaser.Input.Gamepad.Gamepad, button: Phaser.Input.Gamepad.Button): void => {
-    if (button.index === 0) this.interactQueued = true; // A
-    if (button.index === 1) this.closeQueued = true; // B
+    if (button.index === PAD_BUTTONS.interact) this.interactQueued = true; // X / Square
+    if (button.index === PAD_BUTTONS.exit) this.closeQueued = true; // B / Circle
   };
 
+  /** "E to Talk", "X/SQ to Read", "Tap to Open": the key follows the active device, the verb the object. */
   private refreshPromptText(): void {
-    const label = InputHints.get(this.scene).labels.interact;
-    this.prompt.setText(this.isTouch ? "Tap  —  Interact" : `${label}  —  Interact`);
+    const key = InputHints.get(this.scene).labels.interact;
+    const verb = this.nearbyObject?.interactLabel ?? "Interact";
+    this.prompt.setText(`${key} to ${verb}`);
   }
 
   private onPromptTap(): void {
@@ -187,9 +183,12 @@ export class InteractionManager {
     this.activeObject = null;
     if (!object.dialogueId) return;
 
-    const started = this.dialogue.start(object.dialogueId, () => {
-      this.activeObject = null;
-      this.refreshNearby();
+    const started = this.dialogue.start(object.dialogueId, {
+      speaker: object, // the bubble floats above this object
+      onEnd: () => {
+        this.activeObject = null;
+        this.refreshNearby();
+      },
     });
     if (started) this.activeObject = object;
   }
@@ -223,6 +222,7 @@ export class InteractionManager {
 
     this.nearbyObject = closest;
     this.prompt.setVisible(closest !== null);
+    if (closest !== previous) this.refreshPromptText();
 
     // Soft cue when something new comes into range.
     if (closest && closest !== previous) {
@@ -238,4 +238,4 @@ export class InteractionManager {
     const { width, height } = this.scene.scale;
     this.prompt.setPosition(width / 2, height - 30);
   }
-}
+}

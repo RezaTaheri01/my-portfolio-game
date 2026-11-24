@@ -26,6 +26,8 @@ const DEPTH = 8; // same as the hand-drawn NPCs
 
 export class SpriteNPC extends Phaser.GameObjects.Container implements IInteractable, Updatable {
   public readonly dialogueId: string;
+  public readonly interactLabel = "Talk";
+  public readonly bubbleOffsetY: number;
 
   private readonly sprite: Phaser.GameObjects.Sprite;
   private readonly feedback: ProximityFeedback;
@@ -50,6 +52,7 @@ export class SpriteNPC extends Phaser.GameObjects.Container implements IInteract
     this.add(this.sprite);
 
     const height = this.sprite.displayHeight;
+    this.bubbleOffsetY = height + 10;
     this.feedback = new ProximityFeedback(scene, this, {
       glowY: -height * 0.4,
       indicatorY: -(height + 14),

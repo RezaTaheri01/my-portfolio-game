@@ -47,6 +47,8 @@ const PALETTE = {
 export class SajjadNPC extends Phaser.GameObjects.Container {
     /** Dialogue opened on interact. Content: public/data/dialogues/*.json */
     public readonly dialogueId: string;
+    public readonly interactLabel = "Talk";
+    public readonly bubbleOffsetY = 82; // seated sprite is 72px tall
 
     // Textures are identical for every Sajjad, so they're generated once
     // and shared. A ref count removes them when the last instance dies.

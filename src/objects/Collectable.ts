@@ -43,6 +43,7 @@ function drawLook(g: Phaser.GameObjects.Graphics, look: ItemLook): void {
 
 export class Collectable extends Phaser.GameObjects.Container implements IInteractable, Updatable {
   private readonly glow: Phaser.GameObjects.Arc;
+  public readonly interactLabel: string;
   private collected = false;
   private nearbyTween?: Phaser.Tweens.Tween;
 
@@ -54,6 +55,7 @@ export class Collectable extends Phaser.GameObjects.Container implements IIntera
     private readonly ctx: SpawnContext
   ) {
     super(scene, config.x, config.y);
+    this.interactLabel = `Pick up ${def.name}`;
 
     this.glow = scene.add.arc(0, 0, 22, 0, 360, false, def.look?.color ?? 0xffd36b, 0.14);
     this.add(this.glow);
