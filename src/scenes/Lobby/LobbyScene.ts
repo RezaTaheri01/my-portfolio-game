@@ -108,7 +108,7 @@ export class LobbyScene extends Phaser.Scene {
     this.createPlayer();
 
     DialogueManager.registerFromCache(this, LOBBY.bundles);
-    this.dialogue = new DialogueManager(this);
+    this.dialogue = new DialogueManager(this, this.player);
     this.interactionManager = new InteractionManager(this, this.player, this.dialogue);
 
     // Signs, NPCs, items, triggers: all declared in data/scenes/lobby.ts.
@@ -130,7 +130,7 @@ export class LobbyScene extends Phaser.Scene {
   }
 
   update(time: number): void {
-    this.player.update(this.interactionManager.capturesJump);
+    this.player.update(this.interactionManager.isInteracting); // no walking / jumping mid-conversation
     this.entityUpdates.update(time);
     this.interactionManager.update();
     this.playerLight.setPosition(this.player.x, this.player.y - 10);
@@ -679,4 +679,4 @@ export class LobbyScene extends Phaser.Scene {
     draw();
     layout();
   }
-}
+}

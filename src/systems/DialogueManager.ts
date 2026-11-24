@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { SFX } from "../data/audio";
 import { LINK_SETS, type InteractableLink } from "../data/links";
-import { DialogueBox } from "../ui/DialogueBox";
+import { DialogueBox, type BubbleTarget } from "../ui/DialogueBox";
 import { jsonKeysByRole } from "./AssetLoader";
 import type { BundleName } from "../data/assets";
 import { AudioManager } from "./AudioManager";
@@ -79,8 +79,16 @@ interface ShownOption {
   run(): void;
 }
 
+export interface StartOptions {
+  /** Runs when the dialogue closes. */
+  onEnd?: () => void;
+  /** Who is talking (the bubble floats above them). Default: the player. */
+  speaker?: BubbleTarget;
+}
+
 interface Session {
   data: DialogueData;
+  speaker: BubbleTarget;
   nodeId: string;
   page: number;
   options: ShownOption[];
@@ -158,7 +166,8 @@ export class DialogueManager {
   private readonly box: DialogueBox;
   private session: Session | null = null;
 
-  constructor(private readonly scene: Phaser.Scene) {
+  /** `player` is who the bubble avoids covering, and who speaks when nobody else is given. */
+  constructor(private readonly scene: Phaser.Scene, private readonly player: BubbleTarget) {
     this.box = new DialogueBox(scene, {
       onAdvance: () => this.advance(),
       onExit: () => this.close(),
@@ -173,7 +182,7 @@ export class DialogueManager {
   }
 
   /** Open a dialogue by id. Returns false (and logs) if the id is unknown. */
-  start(id: string, onEnd?: () => void): boolean {
+  start(id: string, { onEnd, speaker }: StartOptions = {}): boolean {
     const entry = DialogueManager.library.get(id);
     if (!entry) {
       console.warn(`[Dialogue] Unknown dialogue "${id}".`);
@@ -184,14 +193,16 @@ export class DialogueManager {
 
     const { data } = entry;
     const startNode = this.resolveStart(data);
-    this.session = { data, nodeId: startNode, page: 0, options: [], hasChoices: false, onEnd };
+    this.session = {
+      data, speaker: speaker ?? this.player, nodeId: startNode, page: 0, options: [], hasChoices: false, onEnd,
+    };
 
     this.sfx(SFX.dialogOpen);
     this.enterNode(startNode);
     return this.session !== null;
   }
 
-  /** Next page / next node / close. Bound to E and the Continue button. */
+  /** Next page / next node / close. Bound to the interact key and tapping the bubble. */
   advance(): void {
     const s = this.session;
     if (!s) return;
@@ -328,6 +339,8 @@ export class DialogueManager {
       text: pageText(node.pages[s.page]),
       options: options.map((o) => o.label),
       action: hasChoices ? null : isLast && !node.next ? "Close" : "Continue",
+      speaker: s.speaker,
+      avoid: this.player,
     });
   }
 

@@ -3,19 +3,34 @@ import { GAME_FONT, UI_COLORS as COLORS } from "../game/theme";
 import { InputHints } from "../systems/InputHints";
 
 // ============================================================
-// DialogueBox: the visual component only (the panel at the bottom
-// of the screen). It knows nothing about NPCs or dialogue data;
-// DialogueManager tells it what to show and gets callbacks back.
-// Layout/visuals are unchanged from when this lived in InteractionManager.
+// DialogueBox: a speech bubble that floats in the game world,
+// just above whoever is talking. It never covers the speaker or
+// the player: it sits above the higher of the two heads, so both
+// characters stay visible while the conversation plays out.
+//
+// It knows nothing about NPCs or dialogue data; DialogueManager
+// tells it what to show and gets callbacks back.
 // ============================================================
+
+/** Anything the bubble can point at (NPCs, signs, the player). */
+export interface BubbleTarget {
+  x: number;
+  y: number;
+  /** Distance (px) from `y` up to the top of the head / board. */
+  bubbleOffsetY?: number;
+}
 
 export interface DialogueView {
   title: string;
   text: string;
   /** Clickable rows below the text: dialogue choices or links. */
   options: string[];
-  /** Label of the continue/close button, or null to hide it (waiting on a choice). */
+  /** Verb of the continue button ("Continue" / "Close"), or null while waiting on a choice. */
   action: string | null;
+  /** Who is talking: the bubble's tail points at them. */
+  speaker: BubbleTarget;
+  /** Someone else who must stay uncovered (the player). */
+  avoid?: BubbleTarget;
 }
 
 export interface DialogueBoxHandlers {
@@ -24,80 +39,74 @@ export interface DialogueBoxHandlers {
   onOption(index: number): void;
 }
 
-const UI_DEPTH = 1000;
-const DIALOG_MAX_WIDTH = 560;
-const DIALOG_MIN_HEIGHT = 150;
-const DIALOG_PADDING = 30;
-const OPTION_ROW_HEIGHT = 32;
+const UI_DEPTH = 1001;
+const MAX_WIDTH = 400;
+const SCREEN_MARGIN = 12;
+const PADDING = 16;
+const TAIL_HEIGHT = 12;
+const TAIL_HALF_WIDTH = 9;
+const GAP_ABOVE_HEAD = 8;
+const DEFAULT_HEAD = 90;
+const OPTION_ROW_HEIGHT = 30;
+const RADIUS = 12;
 
 export class DialogueBox {
-  private readonly isTouch: boolean;
-
   private readonly root: Phaser.GameObjects.Container;
-  private readonly background: Phaser.GameObjects.Rectangle;
-  private readonly inner: Phaser.GameObjects.Rectangle;
-  private readonly accent: Phaser.GameObjects.Rectangle;
+  private readonly frame: Phaser.GameObjects.Graphics;
+  private readonly hit: Phaser.GameObjects.Rectangle;
   private readonly title: Phaser.GameObjects.Text;
   private readonly message: Phaser.GameObjects.Text;
-  private readonly action: Phaser.GameObjects.Text;
-  private readonly exit: Phaser.GameObjects.Text;
+  private readonly hint: Phaser.GameObjects.Text;
+  private readonly close: Phaser.GameObjects.Text;
 
   private optionRows: Phaser.GameObjects.Text[] = [];
-  private actionLabel: string | null = null;
+  private optionLabels: string[] = [];
+  private view: DialogueView | null = null;
+
+  private width = MAX_WIDTH;
+  private height = 100;
+  // Last drawn frame, so the outline is only rebuilt when something changed.
+  private drawn = { width: 0, height: 0, tailX: NaN };
   private unsubscribeHints?: () => void;
 
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly handlers: DialogueBoxHandlers
   ) {
-    this.isTouch = scene.sys.game.device.input.touch;
-
     const text = (size: number, color: string, extra: object = {}) =>
       scene.add.text(0, 0, "", { fontFamily: GAME_FONT, fontSize: `${size}px`, color, ...extra });
 
-    this.background = scene.add
-      .rectangle(0, 0, 1, 1, COLORS.forest, 0.97)
-      .setStrokeStyle(3, COLORS.wood);
+    this.frame = scene.add.graphics();
 
-    this.inner = scene.add
-      .rectangle(0, 0, 1, 1, COLORS.forestLight, 0.96)
-      .setStrokeStyle(1, COLORS.forestBorder);
+    // Tapping / clicking the bubble continues the dialogue (only while there's a Continue button).
+    this.hit = scene.add
+      .rectangle(0, 0, 1, 1, 0xffffff, 0)
+      .setOrigin(0)
+      .setInteractive(new Phaser.Geom.Rectangle(0, 0, 1, 1), Phaser.Geom.Rectangle.Contains);
+    this.hit.input!.cursor = "pointer";
+    this.hit.on(Phaser.Input.Events.POINTER_DOWN, () => {
+      if (this.view?.action) handlers.onAdvance();
+    });
 
-    this.accent = scene.add.rectangle(0, 0, 4, 28, COLORS.fire);
+    this.title = text(17, COLORS.fireLight, { fontStyle: "bold" });
+    this.message = text(15, COLORS.cream, { lineSpacing: 6 });
+    this.hint = text(11, COLORS.muted);
 
-    this.title = text(22, COLORS.fireLight, { fontStyle: "bold" });
-    this.message = text(16, COLORS.cream, { lineSpacing: 9 });
-
-    // Clickable hint buttons (bottom-right of the dialog)
-    const button = (label: string, onClick: () => void) => {
-      const b = text(12, COLORS.muted, { padding: { x: 8, y: 6 } })
-        .setText(label)
-        .setOrigin(1, 0)
-        .setScrollFactor(0)
-        .setInteractive({ useHandCursor: true });
-
-      b.on(Phaser.Input.Events.POINTER_DOWN, onClick);
-
-      if (!this.isTouch) {
-        b.on(Phaser.Input.Events.POINTER_OVER, () => b.setColor(COLORS.fireLight));
-        b.on(Phaser.Input.Events.POINTER_OUT, () => b.setColor(COLORS.muted));
-      }
-      return b;
-    };
-
-    this.action = button("", () => handlers.onAdvance());
-    this.exit = button("", () => handlers.onExit());
+    this.close = text(22, COLORS.muted, { padding: { x: 8, y: 0 } })
+      .setText("×")
+      .setOrigin(1, 0)
+      .setInteractive({ useHandCursor: true });
+    this.close.on(Phaser.Input.Events.POINTER_DOWN, () => handlers.onExit());
+    this.close.on(Phaser.Input.Events.POINTER_OVER, () => this.close.setColor(COLORS.fireLight));
+    this.close.on(Phaser.Input.Events.POINTER_OUT, () => this.close.setColor(COLORS.muted));
 
     this.root = scene.add
-      .container(0, 0, [
-        this.background, this.inner, this.accent,
-        this.title, this.message, this.action, this.exit,
-      ])
-      .setScrollFactor(0)
-      .setDepth(UI_DEPTH + 1)
+      .container(0, 0, [this.frame, this.hit, this.title, this.message, this.hint, this.close])
+      .setDepth(UI_DEPTH)
       .setVisible(false);
 
     scene.scale.on("resize", this.layout, this);
+    scene.events.on(Phaser.Scenes.Events.POST_UPDATE, this.follow, this);
     this.unsubscribeHints = InputHints.get(scene).onChange(() => this.refreshLabels());
   }
 
@@ -106,43 +115,68 @@ export class DialogueBox {
   }
 
   show(view: DialogueView): void {
-    this.title.setText(view.title);
-    this.buildOptions(view.options);
-    this.message.setText(view.text);
+    const wasHidden = !this.root.visible;
+    this.view = view;
 
-    this.actionLabel = view.action;
-    this.action.setVisible(view.action !== null);
-    this.refreshLabels();
+    this.title.setText(view.title);
+    this.message.setText(view.text);
+    this.buildOptions(view.options);
 
     this.root.setVisible(true);
-    this.layout();
-  }
+    this.refreshLabels();
 
-  /** Button hints follow the active device: SPACE/ESC on keyboard, A/B on a controller. */
-  private refreshLabels(): void {
-    const labels = InputHints.get(this.scene).labels;
-
-    if (this.actionLabel !== null) {
-      this.action.setText(
-        this.isTouch ? this.actionLabel : `${labels.interact}  ${this.actionLabel}`
-      );
+    if (wasHidden) {
+      this.scene.tweens.killTweensOf(this.root);
+      this.root.setAlpha(0);
+      this.scene.tweens.add({ targets: this.root, alpha: 1, duration: 140, ease: "Sine.easeOut" });
     }
-    this.exit.setText(this.isTouch ? "Exit" : `${labels.exit}  Exit`);
-
-    this.layout();
   }
 
   hide(): void {
+    this.view = null;
     this.clearOptions();
+    this.scene.tweens.killTweensOf(this.root);
     this.root.setVisible(false);
-    this.action.setColor(COLORS.muted);
-    this.exit.setColor(COLORS.muted);
+    this.close.setColor(COLORS.muted);
   }
 
   destroy(): void {
     this.unsubscribeHints?.();
     this.scene.scale.off("resize", this.layout, this);
+    this.scene.events.off(Phaser.Scenes.Events.POST_UPDATE, this.follow, this);
+    this.scene.tweens?.killTweensOf(this.root);
     this.root.destroy();
+  }
+
+  // ========================================
+  // LABELS (follow the active device)
+  // ========================================
+
+  private refreshLabels(): void {
+    const view = this.view;
+    if (!view) return;
+
+    const hints = InputHints.get(this.scene);
+    const touch = hints.mode === "touch";
+    const { interact, exit } = hints.labels;
+
+    // Footer hint, e.g. "E to continue  ·  ESC to exit" or "Tap to continue".
+    let footer: string;
+    if (view.action) {
+      const verb = view.action.toLowerCase();
+      footer = touch ? `Tap to ${verb}` : `${interact} to ${verb}   ·   ${exit} to exit`;
+    } else {
+      const n = view.options.length;
+      footer = touch ? "Tap an option" : `${n > 1 ? `1-${n}` : "1"} to choose   ·   ${exit} to exit`;
+    }
+    this.hint.setText(footer);
+
+    this.optionRows.forEach((row, i) => row.setText(this.optionText(i, touch)));
+    this.layout();
+  }
+
+  private optionText(index: number, touch: boolean): string {
+    return `${touch ? "•" : index + 1}    ${this.optionLabels[index]}`;
   }
 
   // ========================================
@@ -151,22 +185,22 @@ export class DialogueBox {
 
   private buildOptions(labels: string[]): void {
     this.clearOptions();
+    this.optionLabels = labels;
 
-    labels.forEach((label, index) => {
+    labels.forEach((_, index) => {
       const row = this.scene.add
-        .text(0, 0, `${index + 1}    ${label}`, {
+        .text(0, 0, "", {
           fontFamily: GAME_FONT,
-          fontSize: "17px",
+          fontSize: "16px",
           color: COLORS.cream,
           padding: { x: 8, y: 4 },
         })
-        .setScrollFactor(0)
         .setInteractive({ useHandCursor: true });
 
       // POINTER_UP so browsers treat the click as a user gesture for popups.
       row.on(Phaser.Input.Events.POINTER_UP, () => this.handlers.onOption(index));
 
-      if (!this.isTouch) {
+      if (InputHints.get(this.scene).mode !== "touch") {
         row.on(Phaser.Input.Events.POINTER_OVER, () => row.setColor(COLORS.fireLight));
         row.on(Phaser.Input.Events.POINTER_OUT, () => row.setColor(COLORS.cream));
       }
@@ -179,47 +213,115 @@ export class DialogueBox {
   private clearOptions(): void {
     this.optionRows.forEach((row) => row.destroy());
     this.optionRows = [];
+    this.optionLabels = [];
   }
 
   // ========================================
-  // LAYOUT
+  // LAYOUT (size) and FOLLOW (position)
   // ========================================
 
-  // The container sits at the dialog's center; children use local coordinates.
+  // Children use local coordinates; the container's origin is the bubble's top-left.
   private layout(): void {
     if (!this.root.visible) return;
 
-    const { width: screenW, height: screenH } = this.scene.scale;
-    const width = Math.min(DIALOG_MAX_WIDTH, screenW - 32);
+    const { width: screenW } = this.scene.scale;
+    const width = Math.min(MAX_WIDTH, screenW - SCREEN_MARGIN * 2);
+    const inner = width - PADDING * 2;
 
-    // Wrap width must be set before measuring the message height.
-    this.message.setWordWrapWidth(width - DIALOG_PADDING * 2);
+    this.title.setWordWrapWidth(inner - 28);
+    this.message.setWordWrapWidth(inner);
+    this.hint.setWordWrapWidth(inner);
 
-    const titleH = this.title.height;
-    const optionsH = this.optionRows.length ? this.optionRows.length * OPTION_ROW_HEIGHT + 12 : 0;
-    const height = Math.max(DIALOG_MIN_HEIGHT, titleH + this.message.height + optionsH + 85);
+    this.title.setPosition(PADDING + 8, PADDING - 2);
+    const messageTop = this.title.y + this.title.height + 8;
+    this.message.setPosition(PADDING, messageTop);
 
-    this.root.setPosition(screenW / 2, screenH - height / 2 - 28);
+    const rowsTop = messageTop + this.message.height + (this.optionRows.length ? 8 : 0);
+    this.optionRows.forEach((row, i) => row.setPosition(PADDING - 8, rowsTop + i * OPTION_ROW_HEIGHT));
 
-    this.background.setSize(width, height);
-    this.inner.setSize(width - 10, height - 10);
+    const hintTop = rowsTop + this.optionRows.length * OPTION_ROW_HEIGHT + 8;
+    this.hint.setPosition(PADDING, hintTop);
 
-    const left = -width / 2 + DIALOG_PADDING;
-    const top = -height / 2 + 20;
+    this.width = width;
+    this.height = hintTop + this.hint.height + PADDING - 2;
 
-    this.title.setPosition(left + 10, top);
-    this.accent.setSize(4, Math.max(24, titleH)).setPosition(left + 2, top + titleH / 2);
+    this.hit.setSize(width, this.height);
+    // Shapes don't resize their input area on their own.
+    (this.hit.input!.hitArea as Phaser.Geom.Rectangle).setSize(width, this.height);
+    this.close.setPosition(width - 6, 6);
 
-    this.message.setPosition(left, top + titleH + 15);
+    this.follow();
+  }
 
-    const rowsTop = top + titleH + 15 + this.message.height + 12;
-    this.optionRows.forEach((row, i) => row.setPosition(left, rowsTop + i * OPTION_ROW_HEIGHT));
+  private headTop(target: BubbleTarget): number {
+    return target.y - (target.bubbleOffsetY ?? DEFAULT_HEAD);
+  }
 
-    // Buttons have 8/6px text padding, so offset to keep the text aligned.
-    const hintRight = width / 2 - DIALOG_PADDING + 8;
-    const hintY = height / 2 - 31;
+  /** Runs every frame: keeps the bubble above the speaker, inside the screen. */
+  private follow(): void {
+    const view = this.view;
+    if (!view || !this.root.visible) return;
 
-    this.exit.setPosition(hintRight, hintY);
-    this.action.setPosition(hintRight - this.exit.width - 12, hintY);
+    const { worldView } = this.scene.cameras.main;
+    const { width, height } = this;
+
+    // Above the higher head, so neither character is covered.
+    const lowestAllowed = Math.min(
+      this.headTop(view.speaker),
+      view.avoid ? this.headTop(view.avoid) : Infinity
+    );
+    const bottom = lowestAllowed - GAP_ABOVE_HEAD - TAIL_HEIGHT;
+
+    const minX = worldView.x + SCREEN_MARGIN;
+    const maxX = worldView.right - SCREEN_MARGIN - width;
+    const left = Phaser.Math.Clamp(view.speaker.x - width / 2, minX, Math.max(minX, maxX));
+    const top = Math.max(worldView.y + SCREEN_MARGIN, bottom - height);
+
+    this.root.setPosition(Math.round(left), Math.round(top));
+
+    const tailX = Phaser.Math.Clamp(
+      Math.round(view.speaker.x - left),
+      RADIUS + TAIL_HALF_WIDTH,
+      width - RADIUS - TAIL_HALF_WIDTH
+    );
+    this.redraw(width, height, tailX);
+  }
+
+  private redraw(width: number, height: number, tailX: number): void {
+    const d = this.drawn;
+    if (d.width === width && d.height === height && d.tailX === tailX) return;
+    this.drawn = { width, height, tailX };
+
+    const g = this.frame;
+    g.clear();
+
+    // Body
+    g.fillStyle(COLORS.forest, 0.96).fillRoundedRect(0, 0, width, height, RADIUS);
+    g.fillStyle(COLORS.forestLight, 0.9).fillRoundedRect(4, 4, width - 8, height - 8, RADIUS - 3);
+
+    // Tail (filled, then outlined on its two slanted edges only)
+    const tipY = height + TAIL_HEIGHT;
+    g.fillStyle(COLORS.forest, 0.96).fillTriangle(
+      tailX - TAIL_HALF_WIDTH, height - 1,
+      tailX + TAIL_HALF_WIDTH, height - 1,
+      tailX, tipY
+    );
+
+    // Outline
+    g.lineStyle(3, COLORS.wood, 1);
+    g.beginPath();
+    g.moveTo(tailX - TAIL_HALF_WIDTH, height);
+    g.lineTo(tailX, tipY);
+    g.lineTo(tailX + TAIL_HALF_WIDTH, height);
+    g.strokePath();
+
+    g.strokeRoundedRect(0, 0, width, height, RADIUS);
+
+    // Cover the outline where the tail joins the body.
+    g.lineStyle(4, COLORS.forest, 1);
+    g.lineBetween(tailX - TAIL_HALF_WIDTH + 2, height, tailX + TAIL_HALF_WIDTH - 2, height);
+
+    // Title accent
+    g.fillStyle(COLORS.fire, 1).fillRect(PADDING, PADDING, 3, Math.max(18, this.title.height - 4));
   }
 }

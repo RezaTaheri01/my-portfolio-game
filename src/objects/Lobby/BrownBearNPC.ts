@@ -78,6 +78,8 @@ const FLAG = {
 export class BrownBearNPC extends Phaser.GameObjects.Container {
     /** Dialogue opened on interact. Content: public/data/dialogues/*.json */
     public readonly dialogueId: string;
+    public readonly interactLabel = "Talk";
+    public readonly bubbleOffsetY = 122; // 56px sprite x2, plus a margin
 
     // Textures are identical for every bear, so they're generated once
     // and shared. A ref count removes them when the last instance dies.

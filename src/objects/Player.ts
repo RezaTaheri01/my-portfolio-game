@@ -59,7 +59,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private readonly cursors: Phaser.Types.Input.Keyboard.CursorKeys;
   private readonly keys: Record<"A" | "D" | "W" | "SPACE", Phaser.Input.Keyboard.Key>;
 
+  /** Distance (px) from the body's centre up to the top of the head; used by dialogue bubbles. */
+  public readonly bubbleOffsetY = 34;
+
   private touchButtons?: Record<TouchAction, TouchButton>;
+  private touchDimmed = false;
   private touchJumpJustPressed = false;
   private padJumpWasDown = false;
 
@@ -228,6 +232,17 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     }
   };
 
+  /** Fades the on-screen buttons while controls are locked (during an interaction). */
+  private dimTouchControls(dimmed: boolean): void {
+    if (!this.touchButtons || this.touchDimmed === dimmed) return;
+    this.touchDimmed = dimmed;
+
+    for (const { circle, glyph } of Object.values(this.touchButtons)) {
+      circle.setAlpha(dimmed ? 0.35 : 1);
+      glyph.setAlpha(dimmed ? 0.35 : 1);
+    }
+  }
+
   private isTouchDown(action: TouchAction): boolean {
     return (this.touchButtons?.[action].pointers.size ?? 0) > 0;
   }
@@ -275,8 +290,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   // UPDATE
   // ========================================
 
-  /** `suppressJump`: the jump button is being used for something else this frame (interacting). */
-  public update(suppressJump = false): void {
+  /**
+   * `controlsLocked`: an interaction is active, so walking and jumping are off.
+   * Input is still read (and thrown away) so a press made during the lock
+   * doesn't fire the moment it ends.
+   */
+  public update(controlsLocked = false): void {
     const body = this.body as Phaser.Physics.Arcade.Body;
     const now = this.scene.time.now;
 
@@ -284,23 +303,34 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     const pad = this.readPad();
 
-    const left =
+    const leftInput =
       this.cursors.left.isDown || this.keys.A.isDown || this.isTouchDown("left") || pad.left;
-    const right =
+    const rightInput =
       this.cursors.right.isDown || this.keys.D.isDown || this.isTouchDown("right") || pad.right;
 
     const jumpKeys = [this.cursors.up, this.keys.W, this.keys.SPACE];
 
     // map() so every key's JustDown is consumed, not just the first one pressed.
-    const jumpPressedRaw =
+    const jumpPressedInput =
       jumpKeys.map((key) => Phaser.Input.Keyboard.JustDown(key)).some(Boolean) ||
       this.touchJumpJustPressed ||
       pad.jumpPressed;
     this.touchJumpJustPressed = false;
-    const jumpPressed = jumpPressedRaw && !suppressJump;
 
-    const jumpDown =
+    const jumpDownInput =
       jumpKeys.some((key) => key.isDown) || this.isTouchDown("jump") || pad.jumpDown;
+
+    const left = leftInput && !controlsLocked;
+    const right = rightInput && !controlsLocked;
+    const jumpPressed = jumpPressedInput && !controlsLocked;
+    const jumpDown = jumpDownInput && !controlsLocked;
+
+    this.dimTouchControls(controlsLocked);
+
+    if (controlsLocked) {
+      body.setVelocityX(0); // stop on the spot instead of sliding
+      this.jumpPressedTime = -Infinity; // drop any buffered jump
+    }
 
     if (jumpPressed) this.jumpPressedTime = now;
 
@@ -365,4 +395,4 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     super.destroy(fromScene);
   }
-}
+}
