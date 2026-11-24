@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { QUALITY } from "../game/performance";
 
 // Toggle: F3 on keyboard, or triple-tap the top-left corner on touch.
 // Starts visible if the URL has ?debug (e.g. http://192.168.1.20:5173/?debug).
@@ -28,7 +29,7 @@ export function attachDebugOverlay(scene: Phaser.Scene, toggleKey = "F3"): void 
 
     const { actualFps, delta: frameMs } = scene.game.loop;
     text.setText(
-      `FPS     ${actualFps.toFixed(0)}\n` +
+      `FPS     ${actualFps.toFixed(0)}  (${QUALITY.name})\n` +
       `frame   ${frameMs.toFixed(1)} ms\n` +
       `objects ${scene.children.length}\n` +
       `tweens  ${scene.tweens.getTweens().length}`

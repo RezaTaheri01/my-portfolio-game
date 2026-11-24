@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { SCENES } from "../scenes";
+import { QUALITY } from "./performance";
 
 export const gameConfig: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -13,6 +14,10 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
   height: 720,
 
   backgroundColor: "#10152f",
+
+  // Ask for the dedicated GPU and keep frame pacing steady on slow devices.
+  render: { powerPreference: "high-performance", batchSize: QUALITY.mobile ? 2048 : 4096 },
+  fps: { target: 60, smoothStep: true },
 
   physics: {
     default: "arcade",

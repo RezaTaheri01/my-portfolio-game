@@ -10,6 +10,7 @@ import { LOBBY } from "../../data/scenes/lobby";
 import { GAME_FONT } from "../../game/theme";
 import { attachDebugOverlay } from "../../ui/DebugOverlay";
 import { InputHints } from "../../systems/InputHints";
+import { QUALITY } from "../../game/performance";
 
 // ========================================
 // CONFIG
@@ -80,7 +81,7 @@ export class LobbyScene extends Phaser.Scene {
   private interactionManager!: InteractionManager;
   private dialogue!: DialogueManager;
   private entityUpdates = new UpdateList();
-  private playerLight!: Phaser.GameObjects.Light;
+  private playerLight?: Phaser.GameObjects.Light;
 
   constructor() {
     super("LobbyScene");
@@ -133,7 +134,7 @@ export class LobbyScene extends Phaser.Scene {
     this.player.update(this.interactionManager.isInteracting); // no walking / jumping mid-conversation
     this.entityUpdates.update(time);
     this.interactionManager.update();
-    this.playerLight.setPosition(this.player.x, this.player.y - 10);
+    this.playerLight?.setPosition(this.player.x, this.player.y - 10);
   }
 
   // ========================================
@@ -144,9 +145,11 @@ export class LobbyScene extends Phaser.Scene {
     this.player = new Player(this, 180, 600);
     this.physics.add.collider(this.player, this.platforms);
 
-    this.playerLight = this.lights.addLight(
-      this.player.x, this.player.y, 150, COLORS.playerLight, 0.35
-    );
+    if (QUALITY.dynamicLights) {
+      this.playerLight = this.lights.addLight(
+        this.player.x, this.player.y, 150, COLORS.playerLight, 0.35
+      );
+    }
   }
 
   private createPlatforms(): void {
@@ -524,14 +527,16 @@ export class LobbyScene extends Phaser.Scene {
     // Glow sprite
     const glow = this.add
       .image(x, y - 35, "soft-glow")
-      .setScale(3.5)
+      .setScale(QUALITY.campfireGlowScale)
       .setTint(COLORS.fire)
       .setAlpha(0.85)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setDepth(1);
 
     // Dynamic light
-    const fireLight = this.lights.addLight(x, y - 30, 300, COLORS.fire, 2);
+    const fireLight = QUALITY.dynamicLights
+      ? this.lights.addLight(x, y - 30, 300, COLORS.fire, 2)
+      : undefined;
 
     const flicker = (targets: object, props: object, duration: number) =>
       this.tweens.add({
@@ -543,10 +548,13 @@ export class LobbyScene extends Phaser.Scene {
         ease: "Sine.easeInOut",
       });
 
-    flicker(fireLight, { intensity: { from: 1.5, to: 2.3 } }, 450);
+    if (fireLight) flicker(fireLight, { intensity: { from: 1.5, to: 2.3 } }, 450);
+
+    // Glow breathes by +-9% around its base size (the base shrinks on phones).
+    const glowBase = QUALITY.campfireGlowScale;
     flicker(
       glow,
-      { alpha: { from: 0.65, to: 0.95 }, scale: { from: 3.2, to: 3.8 } },
+      { alpha: { from: 0.65, to: 0.95 }, scale: { from: glowBase * 0.91, to: glowBase * 1.09 } },
       550
     );
 
@@ -581,7 +589,7 @@ export class LobbyScene extends Phaser.Scene {
         speedY: { min: -70, max: -25 },
         scale: { start: 0.8, end: 0 },
         alpha: { start: 1, end: 0 },
-        frequency: 100,
+        frequency: QUALITY.emberEveryMs,
         quantity: 1,
         tint: [0xffd16a, 0xff873d, 0xffed9c],
         blendMode: Phaser.BlendModes.ADD,
@@ -603,7 +611,7 @@ export class LobbyScene extends Phaser.Scene {
         speedY: { min: -10, max: 10 },
         scale: { start: 0.8, end: 0.1 },
         alpha: { start: 0, end: 0.9 },
-        frequency: 100,
+        frequency: QUALITY.fireflyEveryMs,
         quantity: 1,
         tint: [0xd9ff91, 0xa6e88b, 0xf6e7a1],
         blendMode: Phaser.BlendModes.ADD,
