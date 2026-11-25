@@ -1,6 +1,7 @@
 import { entities } from "../systems/SceneContent";
 import type { EntityConfig } from "../systems/SceneContent";
 import { spawnCollectable, type CollectableConfig } from "./Collectable";
+import { spawnDoor, type DoorConfig } from "./Door";
 import { BrownBearNPC } from "./Lobby/BrownBearNPC";
 import { LobbyInteractable, type LobbyInteractableConfig } from "./Lobby/LobbyInteractable";
 import { SajjadNPC } from "./Lobby/SajjadNPC";
@@ -49,6 +50,10 @@ entities.register("sprite-npc", (cfg, ctx) => {
 entities.register("sign", (cfg, ctx) => {
   ctx.interaction.add(new LobbyInteractable(ctx.scene, cfg as SignConfig));
 });
+
+// ---------- doors: walk through to another scene ----------
+
+entities.register("door", (cfg, ctx) => spawnDoor(cfg as DoorConfig, ctx));
 
 // ---------- items & triggers ----------
 

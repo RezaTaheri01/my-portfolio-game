@@ -10,6 +10,7 @@ import { LOBBY } from "../../data/scenes/lobby";
 import { GAME_FONT } from "../../game/theme";
 import { attachDebugOverlay } from "../../ui/DebugOverlay";
 import { InputHints } from "../../systems/InputHints";
+import { SceneTransition } from "../../systems/SceneTransition";
 import { QUALITY } from "../../game/performance";
 
 // ========================================
@@ -142,7 +143,9 @@ export class LobbyScene extends Phaser.Scene {
   // ========================================
 
   private createPlayer(): void {
-    this.player = new Player(this, 180, 600);
+    // Fades in, and honours the spawn point of whichever door brought us here.
+    const start = SceneTransition.arrive(this, { x: 180, y: 600 });
+    this.player = new Player(this, start.x, start.y ?? 600);
     this.physics.add.collider(this.player, this.platforms);
 
     if (QUALITY.dynamicLights) {

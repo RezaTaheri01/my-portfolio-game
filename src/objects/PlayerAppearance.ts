@@ -38,6 +38,9 @@ const C = {
 export class PlayerAppearance extends Phaser.GameObjects.Container {
   private sprite: Phaser.GameObjects.Sprite;
   private textures: string[] = [];
+  // Kept separately: on scene shutdown Phaser may destroy this container before
+  // Player.destroy() calls destroy() again, and by then `this.scene` is undefined.
+  private readonly textureManager: Phaser.Textures.TextureManager;
   private readonly prefix: string;
 
   private pose: Pose = "idle";
@@ -48,6 +51,7 @@ export class PlayerAppearance extends Phaser.GameObjects.Container {
 
   constructor(scene: Phaser.Scene) {
     super(scene, 0, 0);
+    this.textureManager = scene.textures;
 
     this.prefix = `adventurer-${PlayerAppearance.nextId++}`;
 
@@ -301,10 +305,11 @@ export class PlayerAppearance extends Phaser.GameObjects.Container {
 
   public destroy(fromScene?: boolean): void {
     for (const key of this.textures) {
-      if (this.scene.textures.exists(key)) {
-        this.scene.textures.remove(key);
+      if (this.textureManager.exists(key)) {
+        this.textureManager.remove(key);
       }
     }
+    this.textures = []; // destroy() can run twice during shutdown
 
     super.destroy(fromScene);
   }
